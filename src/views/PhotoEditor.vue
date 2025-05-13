@@ -413,12 +413,26 @@
             <span v-else>Processing...</span>
           </button>
           
-          <div class="flex justify-end mt-4">
+          <div class="flex justify-end gap-2 mt-4">
+            <button 
+              v-if="bgRemovalActive"
+              @click="undoBgRemoval" 
+              class="px-3 py-1.5 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition"
+            >
+              Undo Removal
+            </button>
             <button 
               @click="cancelBackground" 
               class="px-3 py-1.5 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition"
             >
               Cancel
+            </button>
+            <button 
+              v-if="bgRemovalActive"
+              @click="saveBackgroundChange" 
+              class="px-3 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+            >
+              Save
             </button>
           </div>
         </div>
@@ -429,34 +443,44 @@
 </template>
 
 <script>
-import axios from 'axios';
 
 export default {
   data() {
-    return {
+  return {
+      // Image source and history management
       photo: this.$route.query.photo || '/assets/default.jpg',
-      currentTool: null,
-      isCropping: false,
-      cropper: null,
-      bgRemovalMode: null, 
-      selectionPoints: [],
-      isSelecting: false,
-      bgProcessing: false,
-      bgApiUrl: 'https://api.remove.bg/v1.0/removebg',
       imageHistory: [],
       historyIndex: -1,
-      originalAdjustments: {
-      brightness: 100,
-      contrast: 100,
-      blur: 0,
-      saturation: 100
-    },
+      originalPhotoBeforeBgRemoval: null,
       
-      // Rotation
+      // Tool states
+      currentTool: null,
+      isCropping: false,
+      isSelecting: false,
+      isAddingText: false,
+      isDraggingText: false,
+      
+      // Cropping related
+      cropper: null,
+      
+      // Background removal related
+      bgRemovalMode: null,
+      bgProcessing: false,
+      bgApiUrl: 'https://api.remove.bg/v1.0/removebg',
+      bgRemovalThreshold: 128,
+      bgRemovalActive: false,
+      bgRemovalStrength: 50,
+      bgReplacementColor: '#ffffff',
+      bgReplacementType: 'color',
+      
+      // Selection related
+      selectionPoints: [],
+      
+      // Rotation related
       rotationChanged: false,
       currentRotation: 0,
       
-      // Resize
+      // Resize related
       resizeWidth: null,
       resizeHeight: null,
       maintainRatio: true,
@@ -464,16 +488,21 @@ export default {
       originalHeight: null,
       aspectRatio: null,
       
-      // Adjustments
+      // Image adjustments
       adjustmentValues: {
         brightness: 100,
         contrast: 100,
         blur: 0,
         saturation: 100
       },
-      originalAdjustments: {},
-
-      // Text
+      originalAdjustments: {
+        brightness: 100,
+        contrast: 100,
+        blur: 0,
+        saturation: 100
+      },
+      
+      // Text related
       textElements: [],
       currentText: {
         content: '',
@@ -487,19 +516,12 @@ export default {
         y: 100
       },
       activeTextIndex: null,
-      isDraggingText: false,
-      isAddingText: false,
       dragStartX: 0,
       dragStartY: 0,
       textStartX: 0,
       textStartY: 0,
-
-      // Background removal
-      bgRemovalStrength: 50,
-      bgReplacementColor: '#ffffff',
-      bgReplacementType: 'color',
-
-      // Save options
+      
+      // Output/save options
       outputFormat: 'jpeg',
       outputQuality: 90
     };
@@ -877,85 +899,72 @@ export default {
         document.removeEventListener('mouseup', this.stopTextDrag);
     },
 
-    // Background Removal Methods
     async removeBackground() {
       if (!this.photo) return;
       
+      // Store original photo before processing
+      this.originalPhotoBeforeBgRemoval = this.photo;
       this.bgProcessing = true;
-      this.saveToHistory();
+      this.bgRemovalActive = true;
       
       try {
-        // Convert image to blob
-        const response = await fetch(this.photo);
-        const blob = await response.blob();
-        
-        const formData = new FormData();
-        formData.append('image', blob, 'image.png');
-        
-        // Call background removal API
-        const { data } = await axios.post(this.bgApiUrl, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        
-        // Update with processed image
-        this.photo = data.processedImageUrl; // Adjust based on your API response
-        this.currentTool = null;
+        // Simple client-side background removal (replace with your API call if needed)
+        await this.simpleBackgroundRemoval();
       } catch (error) {
         console.error('Background removal failed:', error);
-        this.undoEdit(); 
+        this.undoBgRemoval();
       } finally {
         this.bgProcessing = false;
       }
     },
 
     simpleBackgroundRemoval() {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        
-        for (let i = 0; i < data.length; i += 4) {
-          const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
-          if (brightness > this.bgRemovalThreshold) {
-            data[i + 3] = 0; // Make pixel transparent
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          
+          for (let i = 0; i < data.length; i += 4) {
+            // Calculate brightness
+            const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            // If pixel is brighter than threshold, make it transparent
+            if (brightness > this.bgRemovalThreshold) {
+              data[i + 3] = 0; // Set alpha to 0 (transparent)
+            }
           }
-        }
-        
-        ctx.putImageData(imageData, 0, 0);
-        this.photo = canvas.toDataURL('image/png');
-        this.currentTool = null;
-      };
-      img.src = this.photo;
+          
+          ctx.putImageData(imageData, 0, 0);
+          this.photo = canvas.toDataURL('image/png'); // Must use PNG for transparency
+          resolve();
+        };
+        img.src = this.photo;
+      });
     },
 
-        saveToHistory() {
-      // Remove any future states if we're in the middle of history
-      if (this.historyIndex < this.imageHistory.length - 1) {
-        this.imageHistory = this.imageHistory.slice(0, this.historyIndex + 1);
+    undoBgRemoval() {
+      if (this.originalPhotoBeforeBgRemoval) {
+        this.photo = this.originalPhotoBeforeBgRemoval;
       }
-      
-      this.imageHistory.push(this.photo);
-      this.historyIndex++;
+      this.bgRemovalActive = false;
+      this.bgProcessing = false;
     },
 
-    undoEdit() {
-      if (this.historyIndex > 0) {
-        this.historyIndex--;
-        this.photo = this.imageHistory[this.historyIndex];
-      }
+    cancelBackground() {
+      this.undoBgRemoval();
+      this.currentTool = null;
     },
 
-    redoEdit() {
-      if (this.historyIndex < this.imageHistory.length - 1) {
-        this.historyIndex++;
-        this.photo = this.imageHistory[this.historyIndex];
-      }
+    saveBackgroundChange() {
+      this.saveToHistory(); // Save to your undo history
+      this.bgRemovalActive = false;
+      this.currentTool = null;
     },
 
     // Save Image
