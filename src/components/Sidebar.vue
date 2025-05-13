@@ -9,10 +9,16 @@
     <nav>
       <ul class="space-y-4">
         <li>
-          <a href="#" class="flex items-center space-x-3 text-blue-100 hover:text-white transition font-medium">
+          <router-link to="/dashboard" class="flex items-center space-x-3 text-blue-100 hover:text-white transition font-medium">
             <i class="lucide lucide-image w-5 h-5"></i>
             <span>All Photos</span>
-          </a>
+          </router-link>
+        </li>
+        <li>
+          <router-link to="/groups" class="flex items-center space-x-3 text-blue-100 hover:text-white transition font-medium">
+            <i class="lucide lucide-users w-5 h-5"></i>
+            <span>Group Management</span>
+          </router-link>
         </li>
       </ul>
     </nav>

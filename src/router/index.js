@@ -4,6 +4,7 @@ import Register from '../views/Register.vue'
 import Dashboard from '../views/Dashboard.vue'
 import ForgotPassword from '../views/ForgotPassword.vue'
 import Editor from '../views/PhotoEditor.vue'
+import GroupManagementPage from './views/GroupManagementPage.vue';
 
 const routes = [
     { path: '/', redirect: '/login' },
