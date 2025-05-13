@@ -368,24 +368,6 @@
         </div>
     </div>
 
-        <div 
-            v-for="(text, index) in textElements" 
-            :key="index"
-            class="absolute select-none"
-            :style="{
-                top: `${text.y}px`,
-                left: `${text.x}px`,
-                color: text.color,
-                fontSize: `${text.size}px`,
-                cursor: currentTool === 'text' ? 'default' : 'move',
-                zIndex: 10
-            }"
-            @mousedown="startTextDrag($event, index)"
-            @click="editText(index)"
-            >
-            {{ text.content }}
-    </div>
-
       <!-- Background Removal Controls -->
       <div v-if="currentTool === 'background'" class="bg-gray-50 p-4 rounded-lg">
         <div class="mb-4">
