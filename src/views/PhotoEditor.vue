@@ -568,58 +568,86 @@ export default {
     },
     
     // Cropping Methods
-    startCropping() {
-      this.isCropping = true;
-      this.$nextTick(() => {
-        const image = this.$refs.cropImage;
-        if (!image) {
-          console.error("Crop image reference not found!");
-          return;
-        }
-        if (this.cropper) {
-          this.cropper.destroy();
-        }
-        
-        this.cropper = new window.Cropper(image, {
-          aspectRatio: NaN, // Free aspect ratio
-          viewMode: 1,
-          autoCropArea: 0.8,
-          responsive: true,
-          guides: false,
-          highlight: false,
-          cropBoxMovable: true,
-          cropBoxResizable: true,
-          toggleDragModeOnDblclick: false,
-          ready: () => {
-            this.cropper.setDragMode('crop');
-          }
-        });
-      });
-    },
-    saveCrop() {
-      if (this.cropper) {
-        const croppedCanvas = this.cropper.getCroppedCanvas({
-          minWidth: 256,
-          minHeight: 256,
-          maxWidth: 4096,
-          maxHeight: 4096,
-          fillColor: '#fff'
-        });
-        
-        if (croppedCanvas) {
-          this.photo = croppedCanvas.toDataURL('image/jpeg', 0.9);
-          this.cancelCrop();
-        }
+  async startCropping() {
+    await this.loadCropper(); // Ensure Cropper is loaded
+    
+    this.isCropping = true;
+    this.$nextTick(() => {
+      const image = this.$refs.cropImage;
+      if (!image) {
+        console.error("Crop image reference not found!");
+        return;
       }
-    },
-    cancelCrop() {
-      this.isCropping = false;
+      
       if (this.cropper) {
         this.cropper.destroy();
-        this.cropper = null;
       }
-      this.currentTool = null;
-    },
+      
+      this.cropper = new window.Cropper(image, {
+        aspectRatio: NaN, // Free aspect ratio
+        viewMode: 1,
+        autoCropArea: 0.8,
+        responsive: true,
+        movable: true,
+        zoomable: true,
+        rotatable: false,
+        scalable: false,
+        ready: () => {
+          this.cropper.setDragMode('crop');
+        }
+      });
+    });
+  },
+
+  saveCrop() {
+    if (!this.cropper) return;
+    
+    try {
+      const croppedCanvas = this.cropper.getCroppedCanvas({
+        minWidth: 256,
+        minHeight: 256,
+        maxWidth: 4096,
+        maxHeight: 4096,
+        fillColor: '#fff'
+      });
+      
+      if (croppedCanvas) {
+        this.photo = croppedCanvas.toDataURL('image/jpeg', 0.9);
+        this.saveToHistory();
+        this.cancelCrop();
+      }
+    } catch (error) {
+      console.error('Error while cropping:', error);
+    }
+  },
+
+  cancelCrop() {
+    this.isCropping = false;
+    if (this.cropper) {
+      this.cropper.destroy();
+      this.cropper = null;
+    }
+    this.currentTool = null;
+  },
+
+    loadCropper() {
+  return new Promise((resolve) => {
+    if (window.Cropper) {
+      resolve();
+      return;
+    }
+
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/cropperjs@1.5.12/dist/cropper.min.js';
+      script.onload = resolve;
+      document.head.appendChild(script);
+
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://cdn.jsdelivr.net/npm/cropperjs@1.5.12/dist/cropper.min.css';
+      document.head.appendChild(link);
+    });
+  },
     
     // Rotation Methods
     rotateImage(degrees) {
@@ -1032,7 +1060,16 @@ export default {
       link.href = 'https://cdn.jsdelivr.net/npm/cropperjs@1.5.12/dist/cropper.min.css';
       document.head.appendChild(link);
     }
-  }
+    
+    // Load the original image dimensions
+    const img = new Image();
+    img.onload = () => {
+      this.originalWidth = img.width;
+      this.originalHeight = img.height;
+      this.aspectRatio = img.width / img.height;
+    };
+    img.src = this.photo;
+  },
 },
 };
 </script>

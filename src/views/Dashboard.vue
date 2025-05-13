@@ -332,7 +332,7 @@ export default {
       return date.toLocaleString();
     },
     deletePhoto(photo) {
-      this.photos = this.photos.filter(p => p !== photo);
+      this.photos = this.photos.filter(p => p.name !== photo.name);
       this.isViewerOpen = false;
     },
   },
