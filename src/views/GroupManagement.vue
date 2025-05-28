@@ -127,37 +127,7 @@
             </ul>
           </div>
 
-          <!-- Group Permissions -->
-          <div class="mb-6">
-            <h3 class="font-medium mb-2">Group Permissions</h3>
-            <div class="space-y-2">
-              <label class="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  v-model="editingGroup.permissions.upload"
-                  class="rounded text-blue-600"
-                >
-                <span>Allow members to upload files</span>
-              </label>
-              <label class="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  v-model="editingGroup.permissions.delete"
-                  class="rounded text-blue-600"
-                >
-                <span>Allow members to delete files</span>
-              </label>
-              <label class="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  v-model="editingGroup.permissions.share"
-                  class="rounded text-blue-600"
-                >
-                <span>Allow members to share files</span>
-              </label>
-            </div>
-          </div>
-
+          
           <div class="flex justify-end gap-2 pt-4 border-t">
             <button
               @click="closeEditModal"
