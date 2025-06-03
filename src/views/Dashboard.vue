@@ -7,8 +7,9 @@
     <div class="flex-1 px-6 py-4">
       
       <!-- Header -->
-      <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-semibold text-blue-900">My Photos</h1>
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-semibold text-blue-900">My Photos</h1>
+      <div class="flex items-center space-x-4">
         <input
           type="file"
           multiple
@@ -22,7 +23,14 @@
         >
           Upload
         </button>
+        <button
+          @click="handleLogout"
+          class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+        >
+          Logout
+        </button>
       </div>
+    </div>
 
       <!-- Drag-and-Drop Area -->
       <div
@@ -205,6 +213,10 @@ export default {
     },
   },
   methods: {
+    handleLogout() {
+      localStorage.removeItem('user') 
+      this.$router.push('/login')      
+    },
     handleFileUpload(event) {
       const files = Array.from(event.target.files);
       this.loadPhotos(files);
