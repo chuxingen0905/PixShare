@@ -211,11 +211,29 @@ export default {
         photo.name.toLowerCase().includes(this.searchQuery.toLowerCase())
       );
     },
-  },
-  methods: {
-    handleLogout() {
-      localStorage.removeItem('user') 
-      this.$router.push('/login')      
+  },  methods: {
+    async handleLogout() {
+      try {
+        // Import auth service
+        const authService = await import('../services/auth.js').then(module => module.default);
+        
+        // Call the proper logout method
+        const result = await authService.logout();
+        
+        if (result.success) {
+          // Also clear any local storage items
+          localStorage.removeItem('user');
+          
+          // Redirect to login page
+          this.$router.push('/login');
+        } else {
+          console.error('Logout failed:', result.error);
+          alert('Logout failed. Please try again.');
+        }
+      } catch (error) {
+        console.error('Logout error:', error);
+        alert('An error occurred during logout. Please try again.');
+      }
     },
     handleFileUpload(event) {
       const files = Array.from(event.target.files);

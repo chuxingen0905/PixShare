@@ -51,10 +51,10 @@ class AuthService {
         username, // Use the username, not email
         confirmationCode: code
       });
-        // Sign out any current user session to prevent "already signed in" errors
+      
+      // Sign out any current user session to prevent "already signed in" errors
       try {
-        await signOut({ global: true });
-        console.log('Signed out user after confirmation');
+        await signOut();
       } catch (signOutError) {
         console.log('Sign out after confirmation:', signOutError);
         // Continue even if sign out fails
@@ -144,14 +144,11 @@ class AuthService {
       };
     }
   }
+
   // Sign out user
   async logout() {
     try {
-      // In Amplify v6, signOut can take options to specify scope
-      await signOut({ global: true });
-      
-      console.log('User successfully signed out from Cognito');
-      
+      await signOut();
       return {
         success: true,
         message: 'Logged out successfully!'
@@ -243,10 +240,11 @@ class AuthService {
       return null;
     }
   }
-    // Helper function to handle "already signed in" error
+  
+  // Helper function to handle "already signed in" error
   async handleAlreadySignedInError() {
     try {
-      await signOut({ global: true });
+      await signOut();
       console.log('Signed out existing user session');
       return true;
     } catch (error) {
