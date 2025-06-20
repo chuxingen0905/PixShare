@@ -22,7 +22,7 @@ const awsconfig = {
     },
     aws_cognito_verification_mechanisms: [],
     aws_appsync_authenticationType: 'AMAZON_COGNITO_USER_POOLS',
-    aws_user_files_s3_bucket: 'pixwebsite',
+    aws_user_files_s3_bucket: 'pixphotos',
     aws_user_files_s3_bucket_region: 'ap-southeast-5',
     aws_cognito_identity_pool_id: 'ap-southeast-5:8a0d9d1f-d196-4c62-889d-a723ca587f35',
 };

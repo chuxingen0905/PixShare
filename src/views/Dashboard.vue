@@ -184,12 +184,9 @@ import PhotoViewer from '../views/PhotoViewer.vue';
 import GroupManagement from '../views/GroupManagement.vue'
 
 export default {
-  components: { Sidebar, PhotoViewer, GroupManagement },
-  data() {
+  components: { Sidebar, PhotoViewer, GroupManagement },  data() {
     return {
-      photos: [
-        { name: 'default.jpg', url: '/assets/default.jpg', originalUrl: '/assets/default.jpg' },
-      ],
+      photos: [], // Empty array, will fetch from AWS
       searchQuery: '',
       selectedPhoto: null,
       isViewerOpen: false,
@@ -248,9 +245,64 @@ export default {
       files.forEach(file => {
         if (file.type.startsWith('image/')) {
           const reader = new FileReader();
-          reader.onload = e => {
-            this.photos.push({ name: file.name, url: e.target.result });
+
+          reader.onload = async (e) => {
+            const base64Image = e.target.result.split(',')[1]; // Only base64
+
+            try {
+              const authService = await import('../services/auth.js').then(module => module.default);
+
+              // Ensure token is valid
+              await authService.ensureValidToken();
+              const token = authService.getIdToken();
+              if (!token) {
+                console.error("Token is null. User may not be logged in.");
+                return;
+              }
+
+              // Get current user ID
+              const user = await authService.getCurrentUser();
+              if (!user || !user.id) {
+                console.error("Missing user ID");
+                return;
+              }
+
+              // Upload to backend
+              const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  userId: user.id,
+                  photoName: file.name,
+                  photoBase64: base64Image,
+                  metadata: {
+                    size: file.size,
+                    type: file.type
+                  }
+                }),
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Upload failed:", errorText);
+                throw new Error(`Upload failed with status ${response.status}`);
+              }
+
+              // ✅ Parse successful result
+              const result = await response.json();
+              console.log("✅ Uploaded successfully:", result);
+
+              // ✅ Add uploaded photo to UI
+              this.photos.push({ name: file.name, url: result.url || e.target.result });
+
+            } catch (err) {
+              console.error("Upload error:", err);
+            }
           };
+
           reader.readAsDataURL(file);
         }
       });
@@ -365,6 +417,71 @@ export default {
       this.photos = this.photos.filter(p => p.name !== photo.name);
       this.isViewerOpen = false;
     },
+    async fetchUserPhotos() {
+      try {
+        // Step 1: Fetch photo metadata (with photoId) from backend
+        const metaResponse = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/profile/images', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('cognito_id_token')}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!metaResponse.ok) {
+          const errorText = await metaResponse.text();
+          console.error(`Failed to fetch photo metadata: ${metaResponse.status}`, errorText);
+          throw new Error(`Failed to fetch photo metadata: ${metaResponse.status}`);
+        }
+        const metaResult = await metaResponse.json();
+        if (!metaResult.images || !Array.isArray(metaResult.images)) {
+          console.error("Invalid API response format - 'images' array missing or not an array", metaResult);
+          return;
+        }
+        const photoIds = metaResult.images.map(photo => photo.photoId);
+        if (!photoIds.length) {
+          this.photos = [];
+          return;
+        }
+        // Step 2: Request presigned URLs from backend
+        const urlResponse = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('cognito_id_token')}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ photoIds })
+        });
+        if (!urlResponse.ok) {
+          const errorText = await urlResponse.text();
+          console.error(`Failed to fetch presigned URLs: ${urlResponse.status}`, errorText);
+          throw new Error(`Failed to fetch presigned URLs: ${urlResponse.status}`);
+        }
+        const urlResult = await urlResponse.json();
+        const urlArray = urlResult.urls || [];
+        const urlMap = Object.fromEntries(urlArray.map(p => [p.photoId, p.signedUrl]));
+        this.photos = metaResult.images.map(photo => ({
+          ...photo,
+          url: urlMap[photo.photoId] || '',
+        }));
+        console.log("Final photos with backend presigned URLs:", this.photos);
+      } catch (error) {
+        console.error("Failed to fetch photos:", error);
+      }
+    },
+  },
+  async mounted() {
+    // Check authentication
+    try {
+      const authService = await import('../services/auth.js').then(module => module.default);
+      const token = authService.getIdToken();
+      if (!token) {
+        console.warn('Not authenticated, redirecting to login');
+        this.$router.push('/login');
+      }
+    } catch (error) {
+      console.error("Authentication check failed:", error);
+      this.$router.push('/login');
+    }
   },
   created() {
     if (this.$route.query.editedPhoto) {
@@ -382,6 +499,9 @@ export default {
         });
       }
     }
+
+    // Fetch user photos on load
+    this.fetchUserPhotos();
   }
 };
 </script>

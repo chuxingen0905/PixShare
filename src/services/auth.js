@@ -308,29 +308,6 @@ class AuthService {
     return token ? { 'Authorization': `Bearer ${token}` } : {};
   }
 
-  // Get AWS credentials for direct service calls
-  getAwsCredentials() {
-    const credentialsStr = localStorage.getItem('aws_credentials');
-    if (!credentialsStr) return null;
-
-    try {
-      const credentials = JSON.parse(credentialsStr);
-
-      // Check if credentials are expired
-      if (credentials.expiration && new Date(credentials.expiration) <= new Date()) {
-        console.log('AWS credentials expired, refreshing...');
-        // Trigger refresh
-        this.refreshCredentials();
-        return null;
-      }
-
-      return credentials;
-    } catch (error) {
-      console.error('Error parsing AWS credentials:', error);
-      return null;
-    }
-  }
-
   // Refresh AWS credentials
   async refreshCredentials() {
     try {
