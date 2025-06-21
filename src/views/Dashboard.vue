@@ -160,18 +160,22 @@
           v-for="(photo, index) in filteredPhotos"
           :key="index"
           @click="openViewer(photo)"
-          class="relative group cursor-pointer aspect-square overflow-hidden bg-blue-100 rounded-lg shadow hover:shadow-lg transition"
+          class="cursor-pointer bg-blue-100 rounded-lg shadow hover:shadow-lg transition flex flex-col"
         >
-          <img
-            :src="photo.url"
-            :alt="photo.name"
-            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-          <div v-if="photo.shared" class="absolute top-2 right-2 bg-blue-500 text-white p-1 rounded-full">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-            </svg>
+          <div class="relative aspect-square w-full overflow-hidden rounded-t-lg">
+            <img
+              :src="photo.url"
+              :alt="photo.name"
+              class="w-full h-full object-cover transition-transform duration-300"
+            />
+            <div v-if="photo.shared" class="absolute top-2 right-2 bg-blue-500 text-white p-1 rounded-full z-30">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+            </div>
           </div>
+          <!-- Always show image name below the image -->
+          <div class="w-full text-center text-xs text-blue-900 bg-white bg-opacity-80 py-1 truncate rounded-b-lg" style="max-width:100%">{{ photo.name }}</div>
         </div>
       </div>
     </div>
@@ -537,10 +541,77 @@ export default {
           ...meta,
           photoId: meta.photoId || meta.id || meta.s3Key || meta.key,
           url: urlMap[meta.photoId || meta.id || meta.s3Key || meta.key] || '',
+          name: meta.name || meta.photoName || meta.PhotoName || meta.s3Key || meta.key || meta.id || 'Unnamed'
         }));
         console.log("Photos with presigned URLs:", this.photos);
       } catch (error) {
         console.error("Error fetching photos:", error);
+      }
+    },
+    async searchPhotos() {
+      try {
+        const authService = await import('../services/auth.js').then(module => module.default);
+        await authService.ensureValidToken();
+        const token = authService.getIdToken();
+        if (!token) {
+          console.error("Token is null. User may not be logged in.");
+          return;
+        }
+        const user = await authService.getCurrentUser();
+        if (!user || !user.id) {
+          console.error("Missing user ID");
+          return;
+        }
+        // Call AWS backend search endpoint
+        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            query: this.searchQuery
+          }),
+        });
+        if (!response.ok) {
+          throw new Error(`Search failed: ${response.status}`);
+        }
+        const result = await response.json();
+        const photoMetas = result.images || [];
+        if (!photoMetas.length) {
+          this.photos = [];
+          return;
+        }
+        // Get presigned URLs for search results
+        const photoIds = photoMetas.map(p => p.photoId || p.s3Key || p.key || p.id).filter(Boolean);
+        if (!photoIds.length) {
+          this.photos = [];
+          return;
+        }
+        const presignRes = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ photoIds }),
+        });
+        if (!presignRes.ok) {
+          throw new Error(`Failed to get presigned URLs: ${presignRes.status}`);
+        }
+        const presignResult = await presignRes.json();
+        const urlMap = {};
+        (presignResult.urls || []).forEach(({ photoId, signedUrl }) => {
+          urlMap[photoId] = signedUrl;
+        });
+        this.photos = photoMetas.map(meta => ({
+          ...meta,
+          photoId: meta.photoId || meta.id || meta.s3Key || meta.key,
+          url: urlMap[meta.photoId || meta.id || meta.s3Key || meta.key] || '',
+        }));
+      } catch (error) {
+        console.error("Error searching photos:", error);
       }
     },
   },
