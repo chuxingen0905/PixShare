@@ -168,10 +168,19 @@
         @edit="goToEditor"
         @share="openShareModal"
         @delete="deletePhoto"
-      />
-
-      <!-- Photo Grid -->
-      <div v-if="filteredPhotos.length === 0" class="text-center text-blue-500 text-lg mt-16">
+      />      <!-- Photo Grid -->
+      <div v-if="!authChecked || isLoadingPhotos" class="text-center text-blue-500 text-lg mt-16">
+        <div class="flex items-center justify-center">
+          <svg class="animate-spin h-8 w-8 mr-3" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>          {{ !authChecked ? 'Checking authentication...' : 'Loading photos...' }}
+        </div>
+        <div class="mt-4 text-sm text-gray-500">
+          If this takes too long, you may need to <button @click="forceLogin" class="text-blue-500 underline">log in again</button>
+        </div>
+      </div>
+      <div v-else-if="filteredPhotos.length === 0" class="text-center text-blue-500 text-lg mt-16">
         No photos found. Upload or change your search.
       </div>
       <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -282,17 +291,10 @@ import shareService from '../services/shareService.js';
 import groupService from '../services/groupService.js';
 
 export default {
-<<<<<<< HEAD
   components: { Sidebar, PhotoViewer, GroupManagement },
-  data() {    return {
-      photos: [
-        { name: 'default.jpg', url: '/assets/default.jpg', originalUrl: '/assets/default.jpg' },
-      ],
-=======
-  components: { Sidebar, PhotoViewer, GroupManagement },  data() {
+  data() {
     return {
       photos: [], // Empty array, will fetch from AWS
->>>>>>> 044b30cce952e271f71d90395ee6746c37f66b0b
       searchQuery: '',
       selectedPhoto: null,
       isViewerOpen: false,
@@ -306,14 +308,17 @@ export default {
       errorMessage: '',
       successMessage: '',
       isLoading: false,
-      
-      // Group creation
+        // Group creation
       showCreateGroupModal: false,
       newGroupName: '',
       newGroupDescription: '',
       isCreatingGroup: false,
       groupCreationError: '',
-      groupCreationSuccess: ''
+      groupCreationSuccess: '',
+      
+      // Loading states
+      isLoadingPhotos: false,
+      authChecked: false
     };
   },
   computed: {
@@ -701,7 +706,6 @@ export default {
       this.photos = this.photos.filter(p => p.name !== photo.name);
       this.isViewerOpen = false;
     },
-<<<<<<< HEAD
 
     /**
      * Show the create group modal
@@ -776,75 +780,170 @@ export default {
       if (!this.isCreatingGroup) {
         this.createNewGroup();
       }
-=======
-    async fetchUserPhotos() {
+    },    async fetchUserPhotos() {
       try {
+        console.log('🔄 Starting to fetch user photos...');
+        this.isLoadingPhotos = true;
+        
+        // Get auth token from auth service instead of localStorage directly
+        const authService = await import('../services/auth.js').then(module => module.default);
+        const token = authService.getIdToken();
+        
+        if (!token) {
+          console.error('❌ No auth token available');
+          return;
+        }
+        
+        console.log('✅ Got auth token, fetching photo metadata...');
+        
         // Step 1: Fetch photo metadata (with photoId) from backend
         const metaResponse = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/profile/images', {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('cognito_id_token')}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         });
+        
+        console.log('📡 Meta response status:', metaResponse.status);
+        
         if (!metaResponse.ok) {
           const errorText = await metaResponse.text();
-          console.error(`Failed to fetch photo metadata: ${metaResponse.status}`, errorText);
+          console.error(`❌ Failed to fetch photo metadata: ${metaResponse.status}`, errorText);
+          
+          // If it's an auth error, redirect to login
+          if (metaResponse.status === 401 || metaResponse.status === 403) {
+            console.warn('🔄 Authentication issue, redirecting to login');
+            this.$router.push('/login');
+            return;
+          }
+          
           throw new Error(`Failed to fetch photo metadata: ${metaResponse.status}`);
         }
+        
         const metaResult = await metaResponse.json();
+        console.log('📋 Meta result:', metaResult);
+        
         if (!metaResult.images || !Array.isArray(metaResult.images)) {
-          console.error("Invalid API response format - 'images' array missing or not an array", metaResult);
-          return;
-        }
-        const photoIds = metaResult.images.map(photo => photo.photoId);
-        if (!photoIds.length) {
+          console.log("ℹ️ No images found or invalid format - starting with empty photos array");
           this.photos = [];
           return;
         }
+        
+        const photoIds = metaResult.images.map(photo => photo.photoId);
+        console.log('🔍 Found photo IDs:', photoIds);
+        
+        if (!photoIds.length) {
+          console.log('ℹ️ No photos found - user has no uploaded photos yet');
+          this.photos = [];
+          return;
+        }
+        
+        console.log('🔄 Fetching presigned URLs for photos...');
+        
         // Step 2: Request presigned URLs from backend
         const urlResponse = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('cognito_id_token')}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ photoIds })
         });
+        
+        console.log('📡 URL response status:', urlResponse.status);
+        
         if (!urlResponse.ok) {
           const errorText = await urlResponse.text();
-          console.error(`Failed to fetch presigned URLs: ${urlResponse.status}`, errorText);
+          console.error(`❌ Failed to fetch presigned URLs: ${urlResponse.status}`, errorText);
           throw new Error(`Failed to fetch presigned URLs: ${urlResponse.status}`);
         }
+        
         const urlResult = await urlResponse.json();
+        console.log('🔗 URL result:', urlResult);
+        
         const urlArray = urlResult.urls || [];
         const urlMap = Object.fromEntries(urlArray.map(p => [p.photoId, p.signedUrl]));
+        
         this.photos = metaResult.images.map(photo => ({
           ...photo,
           url: urlMap[photo.photoId] || '',
         }));
-        console.log("Final photos with backend presigned URLs:", this.photos);
+        
+        console.log("✅ Final photos with backend presigned URLs:", this.photos);
+        console.log(`📊 Loaded ${this.photos.length} photos successfully`);
+        
       } catch (error) {
-        console.error("Failed to fetch photos:", error);
+        console.error("❌ Failed to fetch photos:", error);
+        // Don't redirect on photo fetch errors, just show empty state
+        this.photos = [];
+      } finally {
+        this.isLoadingPhotos = false;
       }
     },
-  },
-  async mounted() {
+    searchPhotos() {
+      // This method is called when the search button is clicked
+      // The filtering is already handled by the computed property filteredPhotos
+      // This method can be used for additional search functionality if needed
+      console.log('Searching for:', this.searchQuery);
+    },
+    
+    forceLogin() {
+      console.log('🔄 Force login - clearing storage and redirecting');
+      localStorage.clear();
+      sessionStorage.clear();
+      this.$router.replace('/login');
+    },
+  },  async mounted() {
     // Check authentication
     try {
+      console.log('🔄 Dashboard mounted, checking authentication...');
       const authService = await import('../services/auth.js').then(module => module.default);
+      
+      // Check if user is actually authenticated
       const token = authService.getIdToken();
+      console.log('🔍 Token check:', token ? 'Token found' : 'No token found');
+      
       if (!token) {
-        console.warn('Not authenticated, redirecting to login');
-        this.$router.push('/login');
+        console.warn('❌ Not authenticated, redirecting to login');
+        // Clear any stale data and redirect
+        localStorage.clear();
+        this.$router.replace('/login');
+        return;
       }
+      
+      // Try to get current user to verify token is valid
+      try {
+        const user = await authService.getCurrentUser();
+        console.log('✅ Current user:', user);
+        
+        if (!user || !user.id) {
+          console.warn('❌ Invalid user data, redirecting to login');
+          localStorage.clear();
+          this.$router.replace('/login');
+          return;
+        }
+        
+        console.log('✅ User authenticated successfully');
+        this.authChecked = true;
+        
+        // If authenticated, fetch photos
+        console.log('🔄 Fetching photos...');
+        await this.fetchUserPhotos();
+        
+      } catch (userError) {
+        console.error('❌ Token validation failed:', userError);
+        localStorage.clear();
+        this.$router.replace('/login');
+        return;
+      }
+      
     } catch (error) {
-      console.error("Authentication check failed:", error);
-      this.$router.push('/login');
->>>>>>> 044b30cce952e271f71d90395ee6746c37f66b0b
+      console.error("❌ Authentication check failed:", error);
+      localStorage.clear();
+      this.$router.replace('/login');
     }
-  },
-  created() {
+  },created() {
     if (this.$route.query.editedPhoto) {
       const photoName = this.$route.query.originalName;
       const existingIndex = this.photos.findIndex(p => p.name === photoName);
@@ -860,9 +959,8 @@ export default {
         });
       }
     }
-
-    // Fetch user photos on load
-    this.fetchUserPhotos();
+    
+    // Note: fetchUserPhotos() is now called in mounted() after auth check
   }
 };
 </script>
