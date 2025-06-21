@@ -411,12 +411,12 @@ export default {
                 throw new Error(`Upload failed with status ${response.status}`);
               }
 
-              // ✅ Parse successful result
+              // Parse successful result
               const result = await response.json();
-              console.log("✅ Uploaded successfully:", result);
+              console.log("Uploaded successfully:", result);
 
-              // ✅ Add uploaded photo to UI
-              this.photos.push({ name: file.name, url: result.url || e.target.result });
+              // After upload, re-fetch the photo list so new photo has photoId and all backend fields
+              await this.fetchUserPhotos();
 
             } catch (err) {
               console.error("Upload error:", err);
@@ -428,11 +428,7 @@ export default {
       });
     },
     openViewer(photo) {
-      this.selectedPhoto = {
-        name: photo.name,
-        src: photo.url || photo.src,
-        shared: photo.shared || false
-      };
+      this.selectedPhoto = photo;
       this.isViewerOpen = true;
     },
     downloadPhoto(photo) {
@@ -702,6 +698,7 @@ export default {
       if (!dateString) return 'Never';
       const date = new Date(dateString);
       return date.toLocaleString();
+<<<<<<< HEAD
     },    deletePhoto(photo) {
       this.photos = this.photos.filter(p => p.name !== photo.name);
       this.isViewerOpen = false;
@@ -798,12 +795,96 @@ export default {
         
         // Step 1: Fetch photo metadata (with photoId) from backend
         const metaResponse = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/profile/images', {
+=======
+    },
+    async deletePhoto(photo) {
+      console.log("[Delete Photo] Incoming photo object:", photo);
+
+      // Extract display name for confirmation
+      const displayName = photo.name || photo.PhotoName || 'this photo';
+
+      const confirmDelete = confirm(`Are you sure you want to delete "${displayName}"?`);
+      if (!confirmDelete) return;
+
+      // Extract valid photoId using all possible fallback keys
+      const photoId = photo.photoId || photo.id || photo.S3Key || photo.s3Key || null;
+
+      if (!photoId) {
+        alert("This photo cannot be deleted because no photoId was found.");
+        console.error("Missing photoId in photo object:", photo);
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('cognito_id_token');
+        if (!token) {
+          alert("You must be logged in to delete photos.");
+          console.error("No auth token found.");
+          return;
+        }
+
+        // Request payload
+        const requestBody = { photoId };
+        console.log("[Delete Photo] Request body to backend:", requestBody);
+
+        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos', {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+    // Check if request failed
+    if (!response.ok) {
+      const errData = await response.json();
+      console.error("Failed to delete photo:", errData);
+      alert(`Failed to delete photo: ${errData.error || response.status}`);
+      return;
+    }
+
+    const result = await response.json();
+    console.log("Photo deleted successfully:", result);
+
+    // Remove deleted photo from local UI state
+    this.photos = this.photos.filter(p => p.photoId !== photo.photoId);
+    this.isViewerOpen = false;
+
+  } catch (error) {
+    console.error("Error deleting photo:", error);
+    alert("An error occurred while deleting the photo.");
+  }
+},
+    async fetchUserPhotos() {
+      try {
+        const authService = await import('../services/auth.js').then(module => module.default);
+        
+        // Ensure token is valid
+        await authService.ensureValidToken();
+        const token = authService.getIdToken();
+        if (!token) {
+          console.error("Token is null. User may not be logged in.");
+          return;
+        }
+
+        // Get current user ID
+        const user = await authService.getCurrentUser();
+        if (!user || !user.id) {
+          console.error("Missing user ID");
+          return;
+        }
+
+        // Fetch photo metadata from backend
+        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/profile/images', {
+>>>>>>> 4a0d7dd004e453dcc0945c93f3d4a92ae72b1387
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         });
+<<<<<<< HEAD
         
         console.log('📡 Meta response status:', metaResponse.status);
         
@@ -843,13 +924,36 @@ export default {
         
         // Step 2: Request presigned URLs from backend
         const urlResponse = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+=======
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch photos: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log("[Profile/Images] Response JSON:", result); // Log full backend response
+        const photoMetas = result.images || [];
+        if (!photoMetas.length) {
+          this.photos = [];
+          return;
+        }
+
+        // POST all photoIds/S3Keys to /photos/display to get presigned URLs
+        const photoIds = photoMetas.map(p => p.photoId || p.s3Key || p.key || p.id).filter(Boolean);
+        if (!photoIds.length) {
+          this.photos = [];
+          return;
+        }
+        const presignRes = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+>>>>>>> 4a0d7dd004e453dcc0945c93f3d4a92ae72b1387
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ photoIds })
+          body: JSON.stringify({ photoIds }),
         });
+<<<<<<< HEAD
         
         console.log('📡 URL response status:', urlResponse.status);
         
@@ -879,6 +983,27 @@ export default {
         this.photos = [];
       } finally {
         this.isLoadingPhotos = false;
+=======
+        if (!presignRes.ok) {
+          throw new Error(`Failed to get presigned URLs: ${presignRes.status}`);
+        }
+        const presignResult = await presignRes.json();
+        console.log("[Photos/Display] Response JSON:", presignResult); // Log full backend response
+        // presignResult should be { urls: { [photoId]: presignedUrl, ... } }
+        const urlMap = {};
+        (presignResult.urls || []).forEach(({ photoId, signedUrl }) => {
+          urlMap[photoId] = signedUrl;
+        });
+        // Map presigned URLs to photos, always set photoId
+        this.photos = photoMetas.map(meta => ({
+          ...meta,
+          photoId: meta.photoId || meta.id || meta.s3Key || meta.key,
+          url: urlMap[meta.photoId || meta.id || meta.s3Key || meta.key] || '',
+        }));
+        console.log("Photos with presigned URLs:", this.photos);
+      } catch (error) {
+        console.error("Error fetching photos:", error);
+>>>>>>> 4a0d7dd004e453dcc0945c93f3d4a92ae72b1387
       }
     },
     searchPhotos() {

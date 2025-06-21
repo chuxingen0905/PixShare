@@ -4,7 +4,7 @@
     <div class="relative max-w-5xl w-full h-full flex flex-col items-center justify-center">
       <button @click="close" class="absolute top-4 right-4 text-white text-3xl">&times;</button>
 
-      <img :src="photo.src" alt="Full View" class="max-h-[80vh] max-w-full object-contain mb-4 rounded shadow" />
+      <img :src="photo.url || photo.src" alt="Full View" class="max-h-[80vh] max-w-full object-contain mb-4 rounded shadow" />
 
       <div class="flex space-x-4 mt-4">
         <button @click="download" class="btn">Download</button>
