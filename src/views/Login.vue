@@ -51,10 +51,11 @@ export default {
     async handleLogin() {
       this.loading = true
       this.error = ''
+      this.success = ''
 
       try {
         const result = await authService.login(this.email, this.password)
-        
+
         if (result.success) {
           this.success = 'Login successful! Redirecting...'
           setTimeout(() => {

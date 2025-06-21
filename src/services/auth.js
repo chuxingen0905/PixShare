@@ -1,4 +1,15 @@
-import { signUp, signIn, signOut, confirmSignUp, resendSignUpCode, resetPassword, confirmResetPassword, getCurrentUser, fetchAuthSession } from 'aws-amplify/auth';
+import {
+  signUp,
+  signIn,
+  signOut,
+  confirmSignUp,
+  resendSignUpCode,
+  resetPassword,
+  confirmResetPassword,
+  getCurrentUser,
+  fetchAuthSession
+} from 'aws-amplify/auth';
+
 import awsService from './aws.js';
 
 class AuthService {
@@ -6,19 +17,18 @@ class AuthService {
   async register(email, password, username, name = '') {
     try {
       const { isSignUpComplete, userId, nextStep } = await signUp({
-        username, // Use the username from the form, not email
+        username,
         password,
         options: {
           userAttributes: {
             email,
             name
           },
-          autoSignIn: false // Changed to false to prevent "already signed in" errors
+          autoSignIn: false
         }
       });
 
       if (isSignUpComplete) {
-        // Create user profile in database
         await awsService.createUserProfile({
           id: userId,
           email,
@@ -31,8 +41,8 @@ class AuthService {
         success: true,
         isSignUpComplete,
         nextStep,
-        message: isSignUpComplete 
-          ? 'Registration successful!' 
+        message: isSignUpComplete
+          ? 'Registration successful!'
           : 'Please check your email for verification code.'
       };
     } catch (error) {
@@ -48,16 +58,15 @@ class AuthService {
   async confirmEmail(username, code) {
     try {
       await confirmSignUp({
-        username, // Use the username, not email
+        username,
         confirmationCode: code
       });
-        // Sign out any current user session to prevent "already signed in" errors
+
       try {
         await signOut({ global: true });
         console.log('Signed out user after confirmation');
       } catch (signOutError) {
-        console.log('Sign out after confirmation:', signOutError);
-        // Continue even if sign out fails
+        console.log('Sign out after confirmation failed:', signOutError);
       }
 
       return {
@@ -76,9 +85,7 @@ class AuthService {
   // Resend verification code
   async resendCode(username) {
     try {
-      await resendSignUpCode({
-        username // Use the username, not email
-      });
+      await resendSignUpCode({ username });
 
       return {
         success: true,
@@ -96,23 +103,50 @@ class AuthService {
   // Sign in user
   async login(email, password) {
     try {
-      // First check if there's already a signed-in user and sign them out
       try {
         await this.handleAlreadySignedInError();
-      } catch (error) {
-        // Ignore errors from this operation
+      } catch (_) {
+        // Ignore if not signed in
       }
 
       const { isSignedIn, nextStep } = await signIn({
         username: email,
         password
-      });
+      }); if (isSignedIn) {
+        // Get full session including tokens and AWS credentials
+        const session = await fetchAuthSession();
 
-      if (isSignedIn) {
-        const user = await this.getCurrentUser();
+        // Save ID token for API calls authentication
+        const idToken = session.tokens?.idToken?.toString();
+        if (idToken) {
+          localStorage.setItem('cognito_id_token', idToken);
+        }
+
+        // Save access token for protected resources
+        const accessToken = session.tokens?.accessToken?.toString();
+        if (accessToken) {
+          localStorage.setItem('cognito_access_token', accessToken);
+        }
+
+        // Save refresh token for getting new tokens
+        const refreshToken = session.tokens?.refreshToken?.toString();
+        if (refreshToken) {
+          localStorage.setItem('cognito_refresh_token', refreshToken);
+        }
+
+        // Save AWS credentials if available (from Identity Pool)
+        if (session.credentials) {
+          localStorage.setItem('aws_credentials', JSON.stringify({
+            accessKeyId: session.credentials.accessKeyId,
+            secretAccessKey: session.credentials.secretAccessKey,
+            sessionToken: session.credentials.sessionToken,
+            expiration: session.credentials.expiration
+          }));
+        }
+
         return {
           success: true,
-          user,
+          token: idToken,
           message: 'Login successful!'
         };
       } else {
@@ -124,34 +158,39 @@ class AuthService {
       }
     } catch (error) {
       console.error('Login error:', error);
-      
-      // If we get the "already signed in" error, try to sign out and login again
-      if (error.message && error.message.includes('There is already a signed in user')) {
+
+      if (error.message?.includes('There is already a signed in user')) {
         try {
           const signedOut = await this.handleAlreadySignedInError();
           if (signedOut) {
-            // Try login again
             return await this.login(email, password);
           }
         } catch (retryError) {
-          console.error('Error during retry login:', retryError);
+          console.error('Retry login failed:', retryError);
         }
       }
-      
+
       return {
         success: false,
         error: error.message || 'Login failed'
       };
     }
   }
+
   // Sign out user
   async logout() {
     try {
-      // In Amplify v6, signOut can take options to specify scope
       await signOut({ global: true });
-      
-      console.log('User successfully signed out from Cognito');
-      
+
+      // Clear all tokens and credentials
+      localStorage.removeItem('cognito_id_token');
+      localStorage.removeItem('cognito_access_token');
+      localStorage.removeItem('cognito_refresh_token');
+      localStorage.removeItem('aws_credentials');
+
+      // For backward compatibility
+      localStorage.removeItem('cognito_token');
+
       return {
         success: true,
         message: 'Logged out successfully!'
@@ -186,7 +225,7 @@ class AuthService {
     try {
       await getCurrentUser();
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -194,10 +233,8 @@ class AuthService {
   // Initiate forgot password flow
   async forgotPassword(email) {
     try {
-      await resetPassword({
-        username: email
-      });
-      
+      await resetPassword({ username: email });
+
       return {
         success: true,
         message: 'Password reset code sent to your email!'
@@ -219,7 +256,7 @@ class AuthService {
         confirmationCode: code,
         newPassword
       });
-      
+
       return {
         success: true,
         message: 'Password reset successfully!'
@@ -231,19 +268,24 @@ class AuthService {
         error: error.message || 'Failed to reset password'
       };
     }
-  }
-  
-  // Get the current auth session (tokens)
+  }  // Get the current auth session (tokens and credentials if available)
   async getSession() {
     try {
       const session = await fetchAuthSession();
-      return session;
+
+      // Return a more complete session object
+      return {
+        tokens: session.tokens,
+        credentials: session.credentials || null,
+        identityId: session.identityId || null
+      };
     } catch (error) {
       console.error('Get session error:', error);
       return null;
     }
   }
-    // Helper function to handle "already signed in" error
+
+  // Handle already signed-in user by signing out
   async handleAlreadySignedInError() {
     try {
       await signOut({ global: true });
@@ -251,6 +293,91 @@ class AuthService {
       return true;
     } catch (error) {
       console.error('Error signing out existing session:', error);
+      return false;
+    }
+  }
+
+  // Get stored ID token for API calls
+  getIdToken() {
+    return localStorage.getItem('cognito_id_token') || localStorage.getItem('cognito_token');
+  }
+
+  // Get Authorization header for API calls
+  getAuthHeader() {
+    const token = this.getIdToken();
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  }
+
+  // Refresh AWS credentials
+  async refreshCredentials() {
+    try {
+      const session = await fetchAuthSession();
+
+      if (session.credentials) {
+        localStorage.setItem('aws_credentials', JSON.stringify({
+          accessKeyId: session.credentials.accessKeyId,
+          secretAccessKey: session.credentials.secretAccessKey,
+          sessionToken: session.credentials.sessionToken,
+          expiration: session.credentials.expiration
+        }));
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error refreshing credentials:', error);
+      return false;
+    }
+  }
+
+  // Check token expiration and refresh if needed
+  async ensureValidToken() {
+    const token = this.getIdToken();
+    if (!token) return false;
+
+    try {
+      // Parse JWT to check expiration
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const expirationTime = payload.exp * 1000; // Convert to milliseconds
+
+      // If token is expired or about to expire (within 5 minutes)
+      if (Date.now() >= expirationTime - 5 * 60 * 1000) {
+        console.log('Token expired or about to expire, refreshing session...');
+        return await this.refreshSession();
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error checking token expiration:', error);
+      return false;
+    }
+  }
+
+  // Refresh the session
+  async refreshSession() {
+    try {
+      const session = await fetchAuthSession();
+
+      // Update stored tokens
+      if (session.tokens?.idToken) {
+        localStorage.setItem('cognito_id_token', session.tokens.idToken.toString());
+      }
+      if (session.tokens?.accessToken) {
+        localStorage.setItem('cognito_access_token', session.tokens.accessToken.toString());
+      }
+
+      // Update AWS credentials
+      if (session.credentials) {
+        localStorage.setItem('aws_credentials', JSON.stringify({
+          accessKeyId: session.credentials.accessKeyId,
+          secretAccessKey: session.credentials.secretAccessKey,
+          sessionToken: session.credentials.sessionToken,
+          expiration: session.credentials.expiration
+        }));
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error refreshing session:', error);
       return false;
     }
   }
