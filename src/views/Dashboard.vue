@@ -156,19 +156,16 @@
             </ul>
           </div>
         </div>
-      </div>
-
-      <!-- Photo Viewer Modal -->
+      </div>      <!-- Photo Viewer Modal -->
       <PhotoViewer
         v-if="selectedPhoto && isViewerOpen && !isShareModalOpen"
         :visible="isViewerOpen"
         :photo="selectedPhoto"
-        @close="isViewerOpen = false"
-        @download="downloadPhoto"
+        @close="isViewerOpen = false"        @download="downloadPhoto"
         @edit="goToEditor"
         @share="openShareModal"
         @delete="deletePhoto"
-      />      <!-- Photo Grid -->
+      /><!-- Photo Grid -->
       <div v-if="!authChecked || isLoadingPhotos" class="text-center text-blue-500 text-lg mt-16">
         <div class="flex items-center justify-center">
           <svg class="animate-spin h-8 w-8 mr-3" fill="none" viewBox="0 0 24 24">
@@ -182,23 +179,37 @@
       </div>
       <div v-else-if="filteredPhotos.length === 0" class="text-center text-blue-500 text-lg mt-16">
         No photos found. Upload or change your search.
-      </div>
-      <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      </div>      <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 p-2">
         <div
           v-for="(photo, index) in filteredPhotos"
           :key="index"
           @click="openViewer(photo)"
-          class="cursor-pointer bg-blue-100 rounded-lg shadow hover:shadow-lg transition flex flex-col"
+          class="photo-card cursor-pointer bg-white rounded-lg shadow hover:shadow-lg transition flex flex-col overflow-hidden"
         >
-          <img
-            :src="photo.url"
-            :alt="photo.name"
-            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-          <div v-if="photo.shared" class="absolute top-2 right-2 bg-blue-500 text-white p-1 rounded-full">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-            </svg>        </div>
+          <div class="aspect-square w-full relative flex items-center justify-center bg-gray-100 overflow-hidden">            <img
+              v-if="photo.url"
+              :src="photo.url"
+              :alt="photo.name"
+              class="w-full h-full object-cover absolute inset-0"
+              @load="photo.loaded = true"
+              @error="handleImageError($event, photo)"
+              loading="lazy"
+            />
+            <div v-else class="flex items-center justify-center h-full w-full text-gray-400">
+              <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div v-if="photo.shared" class="absolute top-2 right-2 bg-blue-500 text-white p-1 rounded-full">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+            </div>
+          </div>
+          <div class="p-2 text-center text-sm font-medium text-gray-700 truncate border-t border-gray-100" :title="photo.name">
+            {{ photo.name }}
+          </div>
+        </div>
       </div>
     </div>
 
@@ -276,10 +287,8 @@
             </svg>
             {{ isCreatingGroup ? 'Creating...' : 'Create Group' }}
           </button>
-        </div>
-      </div>
-    </div>
-  </div>
+        </div>      </div>    </div>
+  
   </div>
 </template>
 
@@ -291,20 +300,19 @@ import shareService from '../services/shareService.js';
 import groupService from '../services/groupService.js';
 
 export default {
-  components: { Sidebar, PhotoViewer, GroupManagement },
-  data() {
+  components: { Sidebar, PhotoViewer, GroupManagement },  data() {
     return {
       photos: [], // Empty array, will fetch from AWS
       searchQuery: '',
       selectedPhoto: null,
-      isViewerOpen: false,
-      isShareModalOpen: false,
+      isViewerOpen: false,      isShareModalOpen: false,
       shareLink: '',
       shareExpiryDate: '',
+      shouldRefreshPhotos: false, // Flag to indicate if photos should be refreshed (when coming from PhotoEditor)
       sharePermissions: {
         view: true,
         edit: false,
-        download: false      },      sharedLinks: [],
+        download: false      },sharedLinks: [],
       errorMessage: '',
       successMessage: '',
       isLoading: false,
@@ -315,10 +323,12 @@ export default {
       isCreatingGroup: false,
       groupCreationError: '',
       groupCreationSuccess: '',
-      
-      // Loading states
+        // Loading states
       isLoadingPhotos: false,
-      authChecked: false
+      authChecked: false,
+      
+      // Image error tracking
+      imageErrors: []
     };
   },
   computed: {
@@ -430,22 +440,67 @@ export default {
     openViewer(photo) {
       this.selectedPhoto = photo;
       this.isViewerOpen = true;
-    },
+    },    
+    
     downloadPhoto(photo) {
-      const link = document.createElement('a');
-      link.href = photo.url;
-      link.download = photo.name;
-      link.click();
-    },
+      try {
+        // First fetch the image to avoid browser requesting from S3 domain
+        fetch(photo.url)
+          .then(response => response.blob())
+          .then(blob => {
+            // Create a blob URL (in your own domain)
+            const blobUrl = URL.createObjectURL(blob);
+            
+            // Create link with blob URL
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            
+            // Set filename with proper extension
+            let fileName = photo.name;
+            if (!fileName.includes('.')) {
+              const ext = photo.url.split('?')[0].split('.').pop() || 'jpg';
+              fileName += '.' + ext;
+            }
+            
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            
+            // Clean up
+            setTimeout(() => {
+              document.body.removeChild(link);
+              URL.revokeObjectURL(blobUrl);
+            }, 100);
+            
+            console.log('Download complete for:', fileName);
+          })
+          .catch(error => {
+            console.error('Download failed:', error);
+            // Fall back to basic method
+            window.open(photo.url, '_blank');
+          });
+      } catch (error) {
+        console.error('Download error:', error);
+      }    },    
     goToEditor(photo) {
+      // Extract photoId from photo object, trying all possible property names
+      const photoId = photo.photoId || photo.id || photo.S3Key || photo.s3Key || null;
+      
+      if (!photoId) {
+        console.error('No photoId found in photo object:', photo);
+        alert('Cannot edit photo: No photo ID found. Please refresh the page and try again.');
+        return;
+      }
+      
       this.$router.push({ 
         name: 'Editor', 
         query: { 
-          photo: photo.originalUrl || photo.url,
-          name: photo.name 
+          photoId: photoId, // Use photo ID for reliable presigned URL fetching
+          name: photo.name,
+          // We no longer need to pass the direct photo URL as we're using photoId
         } 
       });
-    },    openShareModal(photo) {
+    },openShareModal(photo) {
       this.selectedPhoto = photo;
       this.isShareModalOpen = true;
       this.shareLink = '';
@@ -693,17 +748,87 @@ export default {
       const date = new Date();
       date.setDate(date.getDate() + 7); // Default to 7 days from now
       return date.toISOString().slice(0, 16);
-    },
-    formatExpiryDate(dateString) {
+    },    formatExpiryDate(dateString) {
       if (!dateString) return 'Never';
       const date = new Date(dateString);
       return date.toLocaleString();
-<<<<<<< HEAD
-    },    deletePhoto(photo) {
-      this.photos = this.photos.filter(p => p.name !== photo.name);
-      this.isViewerOpen = false;
     },
+    
+    /**
+     * Handle image loading errors and replace with placeholder
+     */
+    handleImageError(event, photo) {
+      console.warn(`Failed to load image for photo: ${photo.name}`);
+      // Replace with a placeholder image or apply a class to show a fallback
+      event.target.style.display = 'none';
+      // Add to error log for troubleshooting
+      if (!this.imageErrors) this.imageErrors = [];
+      this.imageErrors.push({
+        photoId: photo.photoId || photo.id,
+        name: photo.name,
+        url: photo.url,
+        time: new Date().toISOString()
+      });
+    },
+    async deletePhoto(photo) {
+      console.log("[Delete Photo] Incoming photo object:", photo);
 
+      // Extract display name for confirmation
+      const displayName = photo.name || photo.PhotoName || 'this photo';
+
+      const confirmDelete = confirm(`Are you sure you want to delete "${displayName}"?`);
+      if (!confirmDelete) return;
+
+      // Extract valid photoId using all possible fallback keys
+      const photoId = photo.photoId || photo.id || photo.S3Key || photo.s3Key || null;
+
+      if (!photoId) {
+        alert("This photo cannot be deleted because no photoId was found.");
+        console.error("Missing photoId in photo object:", photo);
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('cognito_id_token');
+        if (!token) {
+          alert("You must be logged in to delete photos.");
+          console.error("No auth token found.");
+          return;
+        }
+
+        // Request payload
+        const requestBody = { photoId };
+        console.log("[Delete Photo] Request body to backend:", requestBody);
+
+        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos', {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        // Check if request failed
+        if (!response.ok) {
+          const errData = await response.json();
+          console.error("Failed to delete photo:", errData);
+          alert(`Failed to delete photo: ${errData.error || response.status}`);
+          return;
+        }
+
+        const result = await response.json();
+        console.log("Photo deleted successfully:", result);
+
+        // Remove deleted photo from local UI state
+        this.photos = this.photos.filter(p => p.photoId !== photo.photoId);
+        this.isViewerOpen = false;
+      } catch (error) {
+        console.error("Error deleting photo:", error);
+        alert("An error occurred while deleting the photo.");
+      }
+    },
+    
     /**
      * Show the create group modal
      */
@@ -777,85 +902,8 @@ export default {
       if (!this.isCreatingGroup) {
         this.createNewGroup();
       }
-    },    async fetchUserPhotos() {
-      try {
-        console.log('🔄 Starting to fetch user photos...');
-        this.isLoadingPhotos = true;
-        
-        // Get auth token from auth service instead of localStorage directly
-        const authService = await import('../services/auth.js').then(module => module.default);
-        const token = authService.getIdToken();
-        
-        if (!token) {
-          console.error('❌ No auth token available');
-          return;
-        }
-        
-        console.log('✅ Got auth token, fetching photo metadata...');
-        
-        // Step 1: Fetch photo metadata (with photoId) from backend
-        const metaResponse = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/profile/images', {
-=======
     },
-    async deletePhoto(photo) {
-      console.log("[Delete Photo] Incoming photo object:", photo);
-
-      // Extract display name for confirmation
-      const displayName = photo.name || photo.PhotoName || 'this photo';
-
-      const confirmDelete = confirm(`Are you sure you want to delete "${displayName}"?`);
-      if (!confirmDelete) return;
-
-      // Extract valid photoId using all possible fallback keys
-      const photoId = photo.photoId || photo.id || photo.S3Key || photo.s3Key || null;
-
-      if (!photoId) {
-        alert("This photo cannot be deleted because no photoId was found.");
-        console.error("Missing photoId in photo object:", photo);
-        return;
-      }
-
-      try {
-        const token = localStorage.getItem('cognito_id_token');
-        if (!token) {
-          alert("You must be logged in to delete photos.");
-          console.error("No auth token found.");
-          return;
-        }
-
-        // Request payload
-        const requestBody = { photoId };
-        console.log("[Delete Photo] Request body to backend:", requestBody);
-
-        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos', {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody)
-        });
-
-    // Check if request failed
-    if (!response.ok) {
-      const errData = await response.json();
-      console.error("Failed to delete photo:", errData);
-      alert(`Failed to delete photo: ${errData.error || response.status}`);
-      return;
-    }
-
-    const result = await response.json();
-    console.log("Photo deleted successfully:", result);
-
-    // Remove deleted photo from local UI state
-    this.photos = this.photos.filter(p => p.photoId !== photo.photoId);
-    this.isViewerOpen = false;
-
-  } catch (error) {
-    console.error("Error deleting photo:", error);
-    alert("An error occurred while deleting the photo.");
-  }
-},
+    
     async fetchUserPhotos() {
       try {
         const authService = await import('../services/auth.js').then(module => module.default);
@@ -876,55 +924,12 @@ export default {
         }
 
         // Fetch photo metadata from backend
-        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/profile/images', {
->>>>>>> 4a0d7dd004e453dcc0945c93f3d4a92ae72b1387
-          method: 'GET',
+        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/profile/images', {          method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         });
-<<<<<<< HEAD
-        
-        console.log('📡 Meta response status:', metaResponse.status);
-        
-        if (!metaResponse.ok) {
-          const errorText = await metaResponse.text();
-          console.error(`❌ Failed to fetch photo metadata: ${metaResponse.status}`, errorText);
-          
-          // If it's an auth error, redirect to login
-          if (metaResponse.status === 401 || metaResponse.status === 403) {
-            console.warn('🔄 Authentication issue, redirecting to login');
-            this.$router.push('/login');
-            return;
-          }
-          
-          throw new Error(`Failed to fetch photo metadata: ${metaResponse.status}`);
-        }
-        
-        const metaResult = await metaResponse.json();
-        console.log('📋 Meta result:', metaResult);
-        
-        if (!metaResult.images || !Array.isArray(metaResult.images)) {
-          console.log("ℹ️ No images found or invalid format - starting with empty photos array");
-          this.photos = [];
-          return;
-        }
-        
-        const photoIds = metaResult.images.map(photo => photo.photoId);
-        console.log('🔍 Found photo IDs:', photoIds);
-        
-        if (!photoIds.length) {
-          console.log('ℹ️ No photos found - user has no uploaded photos yet');
-          this.photos = [];
-          return;
-        }
-        
-        console.log('🔄 Fetching presigned URLs for photos...');
-        
-        // Step 2: Request presigned URLs from backend
-        const urlResponse = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
-=======
 
         if (!response.ok) {
           throw new Error(`Failed to fetch photos: ${response.status}`);
@@ -944,46 +949,13 @@ export default {
           this.photos = [];
           return;
         }
-        const presignRes = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
->>>>>>> 4a0d7dd004e453dcc0945c93f3d4a92ae72b1387
-          method: 'POST',
+        const presignRes = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {          method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ photoIds }),
         });
-<<<<<<< HEAD
-        
-        console.log('📡 URL response status:', urlResponse.status);
-        
-        if (!urlResponse.ok) {
-          const errorText = await urlResponse.text();
-          console.error(`❌ Failed to fetch presigned URLs: ${urlResponse.status}`, errorText);
-          throw new Error(`Failed to fetch presigned URLs: ${urlResponse.status}`);
-        }
-        
-        const urlResult = await urlResponse.json();
-        console.log('🔗 URL result:', urlResult);
-        
-        const urlArray = urlResult.urls || [];
-        const urlMap = Object.fromEntries(urlArray.map(p => [p.photoId, p.signedUrl]));
-        
-        this.photos = metaResult.images.map(photo => ({
-          ...photo,
-          url: urlMap[photo.photoId] || '',
-        }));
-        
-        console.log("✅ Final photos with backend presigned URLs:", this.photos);
-        console.log(`📊 Loaded ${this.photos.length} photos successfully`);
-        
-      } catch (error) {
-        console.error("❌ Failed to fetch photos:", error);
-        // Don't redirect on photo fetch errors, just show empty state
-        this.photos = [];
-      } finally {
-        this.isLoadingPhotos = false;
-=======
         if (!presignRes.ok) {
           throw new Error(`Failed to get presigned URLs: ${presignRes.status}`);
         }
@@ -993,18 +965,29 @@ export default {
         const urlMap = {};
         (presignResult.urls || []).forEach(({ photoId, signedUrl }) => {
           urlMap[photoId] = signedUrl;
+        });        // Map presigned URLs to photos, always set photoId
+        this.photos = photoMetas.map(meta => {
+          // Generate unique id for each photo
+          const photoId = meta.photoId || meta.id || meta.s3Key || meta.key;
+          // Get URL from mapping or use empty string
+          const url = urlMap[photoId] || '';
+          // Ensure name is present
+          const name = meta.name || meta.photoName || meta.PhotoName || meta.s3Key || meta.key || meta.id || 'Unnamed';
+          
+          return {
+            ...meta,
+            photoId,
+            url,
+            name,
+            // Flag to track if image is loaded
+            loaded: false
+          };
         });
-        // Map presigned URLs to photos, always set photoId
-        this.photos = photoMetas.map(meta => ({
-          ...meta,
-          photoId: meta.photoId || meta.id || meta.s3Key || meta.key,
-          url: urlMap[meta.photoId || meta.id || meta.s3Key || meta.key] || '',
-          name: meta.name || meta.photoName || meta.PhotoName || meta.s3Key || meta.key || meta.id || 'Unnamed'
-        }));
+        
         console.log("Photos with presigned URLs:", this.photos);
       } catch (error) {
-        console.error("Error fetching photos:", error);
->>>>>>> 4a0d7dd004e453dcc0945c93f3d4a92ae72b1387
+        console.error("Error fetching photos:", error);      } finally {
+        this.isLoadingPhotos = false;
       }
     },
     async searchPhotos() {
@@ -1103,13 +1086,34 @@ export default {
           this.$router.replace('/login');
           return;
         }
-        
-        console.log('✅ User authenticated successfully');
+          console.log('✅ User authenticated successfully');
         this.authChecked = true;
         
         // If authenticated, fetch photos
         console.log('🔄 Fetching photos...');
         await this.fetchUserPhotos();
+          // If we're coming from the photo editor with a refresh flag, just ensure we've refreshed photos
+        if (this.shouldRefreshPhotos) {
+          console.log('📸 Photos refreshed after edit');
+          
+          // We still sort to find the newest photo for debug purposes
+          if (this.photos.length > 0) {
+            const sortedPhotos = [...this.photos].sort((a, b) => {
+              const timeA = a.createdAt || a.lastModified || a.timestamp || 0;
+              const timeB = b.createdAt || b.lastModified || b.timestamp || 0;
+              return new Date(timeB) - new Date(timeA);
+            });
+            
+            // Log the newest photo but don't automatically open it
+            const newestPhoto = sortedPhotos[0];
+            if (newestPhoto) {
+              console.log('🔍 Most recent photo:', newestPhoto.name);
+            }
+          }
+          
+          // Reset the flag
+          this.shouldRefreshPhotos = false;
+        }
         
       } catch (userError) {
         console.error('❌ Token validation failed:', userError);
@@ -1122,8 +1126,15 @@ export default {
       console.error("❌ Authentication check failed:", error);
       localStorage.clear();
       this.$router.replace('/login');
+    }  },
+  created() {
+    // Check if we're coming back from photo editor and need to refresh photos
+    if (this.$route.query.refreshPhotos === 'true') {
+      console.log('Photo editor requested photo refresh - will fetch latest photos');
+      this.shouldRefreshPhotos = true;
     }
-  },created() {
+    
+    // Legacy support for direct edited photo URL passing (can be removed in future)
     if (this.$route.query.editedPhoto) {
       const photoName = this.$route.query.originalName;
       const existingIndex = this.photos.findIndex(p => p.name === photoName);
@@ -1147,6 +1158,27 @@ export default {
 
 <style scoped>
 .btn {
-  @apply bg-white text-gray-700 px-4 py-2 rounded shadow hover:bg-gray-100;
+  background-color: white;
+  color: #4a5568;
+  padding: 1rem 0.5rem;
+  border-radius: 0.25rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+.btn:hover {
+  background-color: #f7fafc;
+}
+
+.photo-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.photo-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 </style>
