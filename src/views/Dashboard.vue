@@ -62,14 +62,23 @@
 
       <!-- Share Modal -->
       <div v-if="isShareModalOpen" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-6 w-full max-w-md">
-          <div class="flex justify-between items-center mb-4">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md">          <div class="flex justify-between items-center mb-4">
             <h2 class="text-xl font-semibold">Share Photo</h2>
             <button @click="closeShareModal" class="text-gray-500 hover:text-gray-700">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+          </div>
+          
+          <!-- Success Message -->
+          <div v-if="successMessage" class="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+            {{ successMessage }}
+          </div>
+          
+          <!-- Error Message -->
+          <div v-if="errorMessage" class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+            {{ errorMessage }}
           </div>
           
           
@@ -119,20 +128,30 @@
               Generate Link
             </button>
           </div>
-          
-          <div v-if="sharedLinks.length > 0" class="mt-6">
+            <div v-if="sharedLinks.length > 0" class="mt-6">
             <h3 class="text-sm font-medium text-gray-700 mb-2">Active Shared Links</h3>
             <ul class="space-y-2 max-h-40 overflow-y-auto">
               <li v-for="(link, index) in sharedLinks" :key="index" class="flex justify-between items-center p-2 bg-gray-50 rounded">
-                <div>
+                <div class="flex-1">
                   <p class="text-xs text-gray-500">Expires: {{ formatExpiryDate(link.expiry) }}</p>
                   <p class="text-xs text-blue-500 truncate">{{ link.url }}</p>
                 </div>
-                <button @click="revokeShareLink(index)" class="text-red-500 hover:text-red-700">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                <div class="flex space-x-2">
+                  <button 
+                    @click="updateShareExpiry(index)" 
+                    class="text-blue-500 hover:text-blue-700"
+                    title="Update Expiry"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </button>
+                  <button @click="revokeShareLink(index)" class="text-red-500 hover:text-red-700" title="Revoke Share">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               </li>
             </ul>
           </div>
@@ -149,10 +168,19 @@
         @edit="goToEditor"
         @share="openShareModal"
         @delete="deletePhoto"
-      />
-
-      <!-- Photo Grid -->
-      <div v-if="filteredPhotos.length === 0" class="text-center text-blue-500 text-lg mt-16">
+      />      <!-- Photo Grid -->
+      <div v-if="!authChecked || isLoadingPhotos" class="text-center text-blue-500 text-lg mt-16">
+        <div class="flex items-center justify-center">
+          <svg class="animate-spin h-8 w-8 mr-3" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>          {{ !authChecked ? 'Checking authentication...' : 'Loading photos...' }}
+        </div>
+        <div class="mt-4 text-sm text-gray-500">
+          If this takes too long, you may need to <button @click="forceLogin" class="text-blue-500 underline">log in again</button>
+        </div>
+      </div>
+      <div v-else-if="filteredPhotos.length === 0" class="text-center text-blue-500 text-lg mt-16">
         No photos found. Upload or change your search.
       </div>
       <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -162,33 +190,109 @@
           @click="openViewer(photo)"
           class="cursor-pointer bg-blue-100 rounded-lg shadow hover:shadow-lg transition flex flex-col"
         >
-          <div class="relative aspect-square w-full overflow-hidden rounded-t-lg">
-            <img
-              :src="photo.url"
-              :alt="photo.name"
-              class="w-full h-full object-cover transition-transform duration-300"
-            />
-            <div v-if="photo.shared" class="absolute top-2 right-2 bg-blue-500 text-white p-1 rounded-full z-30">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-              </svg>
-            </div>
-          </div>
-          <!-- Always show image name below the image -->
-          <div class="w-full text-center text-xs text-blue-900 bg-white bg-opacity-80 py-1 truncate rounded-b-lg" style="max-width:100%">{{ photo.name }}</div>
+          <img
+            :src="photo.url"
+            :alt="photo.name"
+            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+          <div v-if="photo.shared" class="absolute top-2 right-2 bg-blue-500 text-white p-1 rounded-full">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>        </div>
+      </div>
+    </div>
+
+    <!-- Create Group Modal -->
+    <div 
+      v-if="showCreateGroupModal" 
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      @click.self="hideCreateGroup"
+    >
+      <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <h2 class="text-xl font-bold mb-4 text-gray-800">Create New Group</h2>
+        
+        <!-- Success Message -->
+        <div v-if="groupCreationSuccess" class="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+          {{ groupCreationSuccess }}
+        </div>
+        
+        <!-- Error Message -->
+        <div v-if="groupCreationError" class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+          {{ groupCreationError }}
+        </div>
+
+        <!-- Group Name Input -->
+        <div class="mb-4">
+          <label for="groupName" class="block text-sm font-medium text-gray-700 mb-2">
+            Group Name <span class="text-red-500">*</span>
+          </label>
+          <input
+            id="groupName"
+            v-model="newGroupName"
+            type="text"
+            placeholder="Enter group name"
+            maxlength="50"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            :disabled="isCreatingGroup"
+            @keyup.enter="handleGroupNameEnter"
+          />
+          <p class="text-sm text-gray-500 mt-1">{{ newGroupName.length }}/50 characters</p>
+        </div>
+
+        <!-- Group Description Input -->
+        <div class="mb-6">
+          <label for="groupDescription" class="block text-sm font-medium text-gray-700 mb-2">
+            Description (optional)
+          </label>
+          <textarea
+            id="groupDescription"
+            v-model="newGroupDescription"
+            placeholder="Enter group description"
+            maxlength="200"
+            rows="3"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            :disabled="isCreatingGroup"
+          ></textarea>
+          <p class="text-sm text-gray-500 mt-1">{{ newGroupDescription.length }}/200 characters</p>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-end gap-3">
+          <button
+            @click="hideCreateGroup"
+            class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200"
+            :disabled="isCreatingGroup"
+          >
+            Cancel
+          </button>
+          <button
+            @click="createNewGroup"
+            :disabled="isCreatingGroup || !newGroupName.trim()"
+            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-2"
+          >
+            <svg v-if="isCreatingGroup" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {{ isCreatingGroup ? 'Creating...' : 'Create Group' }}
+          </button>
         </div>
       </div>
     </div>
+  </div>
   </div>
 </template>
 
 <script>
 import Sidebar from '../components/Sidebar.vue';
 import PhotoViewer from '../views/PhotoViewer.vue';
-import GroupManagement from '../views/GroupManagement.vue'
+import GroupManagement from '../views/GroupManagement.vue';
+import shareService from '../services/shareService.js';
+import groupService from '../services/groupService.js';
 
 export default {
-  components: { Sidebar, PhotoViewer, GroupManagement },  data() {
+  components: { Sidebar, PhotoViewer, GroupManagement },
+  data() {
     return {
       photos: [], // Empty array, will fetch from AWS
       searchQuery: '',
@@ -200,9 +304,21 @@ export default {
       sharePermissions: {
         view: true,
         edit: false,
-        download: false
-      },
-      sharedLinks: []
+        download: false      },      sharedLinks: [],
+      errorMessage: '',
+      successMessage: '',
+      isLoading: false,
+        // Group creation
+      showCreateGroupModal: false,
+      newGroupName: '',
+      newGroupDescription: '',
+      isCreatingGroup: false,
+      groupCreationError: '',
+      groupCreationSuccess: '',
+      
+      // Loading states
+      isLoadingPhotos: false,
+      authChecked: false
     };
   },
   computed: {
@@ -329,74 +445,244 @@ export default {
           name: photo.name 
         } 
       });
-    },
-    openShareModal(photo) {
+    },    openShareModal(photo) {
       this.selectedPhoto = photo;
       this.isShareModalOpen = true;
       this.shareLink = '';
       this.shareExpiryDate = this.getDefaultExpiryDate();
+      
+      // Load existing shared links for this photo
       this.loadSharedLinks(photo);
     },
     closeShareModal() {
       this.isShareModalOpen = false;
       this.shareLink = '';
-    },
-    generateShareLink() {
-      // In a real app, this would call your backend API to generate a pre-signed URL
-      const baseUrl = window.location.origin;
-      const token = this.generateToken();
-      const photoId = this.selectedPhoto.name;
-      
-      // Construct the share link with permissions and expiry
-      const permissions = [];
-      if (this.sharePermissions.view) permissions.push('view');
-      if (this.sharePermissions.edit) permissions.push('edit');
-      if (this.sharePermissions.download) permissions.push('download');
-      
-      this.shareLink = `${baseUrl}/share/${photoId}?token=${token}&perms=${permissions.join(',')}`;
-      
-      // Store the shared link
-      this.sharedLinks.push({
-        url: this.shareLink,
-        expiry: this.shareExpiryDate,
-        permissions: this.sharePermissions,
-        token: token
-      });
-      
-      // Mark the photo as shared
-      const photoIndex = this.photos.findIndex(p => p.name === this.selectedPhoto.name);
-      if (photoIndex !== -1) {
-        this.photos[photoIndex].shared = true;
+    },    async generateShareLink() {
+      try {
+        // Show loading state
+        this.isLoading = true;
+        this.errorMessage = '';
+        
+        const photoId = this.selectedPhoto.name;
+        console.log('Generating share link for photo:', photoId);
+        
+        // Construct the permissions object
+        const permissions = {
+          view: this.sharePermissions.view,
+          edit: this.sharePermissions.edit,
+          download: this.sharePermissions.download
+        };
+        console.log('Selected permissions:', permissions);
+        
+        // Call the AWS API via our service
+        console.log('Calling createShareLink API...');
+        const result = await shareService.createShareLink(photoId, permissions, this.shareExpiryDate);
+        console.log('API response:', result);
+        
+        if (result.success) {
+          this.shareLink = result.shareLink;
+          console.log('Share link generated:', this.shareLink);
+          
+          // Store the shared link
+          this.sharedLinks.push({
+            url: this.shareLink,
+            expiry: this.shareExpiryDate,
+            permissions: this.sharePermissions,
+            shareId: result.shareId
+          });
+          
+          // Mark the photo as shared
+          const photoIndex = this.photos.findIndex(p => p.name === this.selectedPhoto.name);
+          if (photoIndex !== -1) {
+            this.photos[photoIndex].shared = true;
+          }
+          
+          // Show success message
+          this.errorMessage = '';
+        } else {
+          // Handle error
+          console.error('API returned error:', result.error);
+          this.errorMessage = result.error || 'Failed to create share link';
+          setTimeout(() => {
+            this.errorMessage = '';
+          }, 5000);
+        }
+      } catch (error) {
+        console.error('Error generating share link:', error);
+        this.errorMessage = error.message || 'An unexpected error occurred';
+        
+        // Keep error visible longer for debugging
+        setTimeout(() => {
+          this.errorMessage = '';
+        }, 8000);
+      } finally {
+        // Hide loading state
+        this.isLoading = false;
       }
     },
     copyShareLink() {
       this.$refs.shareLinkInput.select();
       document.execCommand('copy');
       this.$toast.success('Link copied to clipboard!');
-    },
-    revokeShareLink(index) {
-      this.sharedLinks.splice(index, 1);
-      
-      // If no more shared links, mark photo as not shared
-      if (this.sharedLinks.length === 0) {
-        const photoIndex = this.photos.findIndex(p => p.name === this.selectedPhoto.name);
-        if (photoIndex !== -1) {
-          this.photos[photoIndex].shared = false;
+    },    async revokeShareLink(index) {
+      try {
+        const share = this.sharedLinks[index];
+        
+        if (!share || !share.shareId) {
+          console.warn('Invalid share or missing shareId');
+          return;
         }
+        
+        // Ask for confirmation before deleting
+        if (!confirm('Are you sure you want to delete this share link? This action cannot be undone.')) {
+          return;
+        }
+        
+        console.log('🗑️ Deleting share link:', share.shareId);
+        
+        // Call the AWS API to delete the share link
+        const result = await shareService.deleteShareLink(share.shareId);
+          if (result.success) {
+          console.log('✅ Share link deleted successfully');
+          
+          // Remove from local array
+          this.sharedLinks.splice(index, 1);
+          
+          // Show success message
+          alert('Share link deleted successfully');
+          
+          // If no more shared links, mark photo as not shared
+          if (this.sharedLinks.length === 0) {
+            const photoIndex = this.photos.findIndex(p => p.name === this.selectedPhoto.name);
+            if (photoIndex !== -1) {
+              this.photos[photoIndex].shared = false;
+            }
+          }        } else {
+          console.error('❌ Failed to delete share link:', result.error);
+          
+          // Show error message
+          this.errorMessage = result.error || 'Failed to delete share link';
+          setTimeout(() => {
+            this.errorMessage = '';
+          }, 5000);
+        }      } catch (error) {
+        console.error('❌ Error deleting share link:', error);
+        this.errorMessage = 'An error occurred while deleting the share link';
+        setTimeout(() => {
+          this.errorMessage = '';
+        }, 5000);
       }
     },
-    loadSharedLinks(photo) {
-      // In a real app, this would fetch from your backend
-      this.sharedLinks = [];
-      
-      // Mock data for demonstration
-      if (photo.shared) {
-        this.sharedLinks.push({
-          url: `${window.location.origin}/share/${photo.name}?token=mock123`,
-          expiry: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          permissions: { view: true, edit: false, download: false },
-          token: 'mock123'
-        });
+    
+    async updateShareExpiry(index) {
+      try {
+        const share = this.sharedLinks[index];
+        if (!share || !share.shareId) {
+          console.warn('Invalid share or missing shareId');
+          return;
+        }
+        
+        // Show a simple prompt for new expiry date
+        const newExpiryInput = prompt('Enter new expiry date (YYYY-MM-DD) or leave empty for 1 week from now:');
+        
+        let newExpiryDate;
+        if (newExpiryInput && newExpiryInput.trim()) {
+          // Parse the user input
+          const inputDate = new Date(newExpiryInput.trim());
+          if (isNaN(inputDate.getTime())) {
+            this.errorMessage = 'Invalid date format. Please use YYYY-MM-DD format.';
+            setTimeout(() => {
+              this.errorMessage = '';
+            }, 3000);
+            return;
+          }
+          
+          // Check if the date is in the future
+          if (inputDate <= new Date()) {
+            this.errorMessage = 'Expiry date must be in the future.';
+            setTimeout(() => {
+              this.errorMessage = '';
+            }, 3000);
+            return;
+          }
+          
+          newExpiryDate = inputDate.toISOString();
+        } else {
+          // Default to 1 week from now
+          const oneWeekFromNow = new Date();
+          oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+          newExpiryDate = oneWeekFromNow.toISOString();
+        }
+        
+        console.log('Updating share expiry:', share.shareId, 'to:', newExpiryDate);
+        
+        // Call the AWS API to update the share expiry
+        const result = await shareService.updateShareExpiry(share.shareId, newExpiryDate);
+        
+        if (result.success) {
+          // Update the local array
+          this.sharedLinks[index].expiry = newExpiryDate;
+          
+          // Show success message
+          this.successMessage = 'Share expiry updated successfully';
+          setTimeout(() => {
+            this.successMessage = '';
+          }, 3000);
+        } else {
+          // Show error message
+          this.errorMessage = result.error || 'Failed to update share expiry';
+          setTimeout(() => {
+            this.errorMessage = '';
+          }, 3000);
+        }
+      } catch (error) {
+        console.error('Error updating share expiry:', error);
+        this.errorMessage = 'An error occurred while updating the share expiry';
+        setTimeout(() => {
+          this.errorMessage = '';
+        }, 3000);
+      }
+    },
+    
+    async loadSharedLinks(photo) {
+      try {
+        this.sharedLinks = [];
+        
+        if (!photo || !photo.name) {
+          console.warn('Invalid photo object provided to loadSharedLinks');
+          return;
+        }
+        
+        // Call the AWS API to get shares for this photo
+        const shares = await shareService.getPhotoShares(photo.name);
+        
+        // Map the API response to our UI format
+        if (shares && shares.length > 0) {
+          this.sharedLinks = shares.map(share => {
+            // Convert permission string back to object for UI
+            let permissions = { 
+              view: true, 
+              edit: false, 
+              download: false 
+            };
+            
+            if (share.permission === 'edit') {
+              permissions = { view: true, edit: true, download: false };
+            } else if (share.permission === 'download') {
+              permissions = { view: true, edit: false, download: true };
+            }
+            
+            return {
+              url: share.shareUrl || `${window.location.origin}/share/${photo.name}?id=${share.shareId}`,
+              expiry: share.expiryDate,
+              permissions: permissions,
+              shareId: share.shareId
+            };
+          });
+        }
+      } catch (error) {
+        console.error('Error loading shared links:', error);
+        // Don't show an error message to the user here since this is a background operation
       }
     },
     generateToken() {
@@ -412,6 +698,104 @@ export default {
       if (!dateString) return 'Never';
       const date = new Date(dateString);
       return date.toLocaleString();
+<<<<<<< HEAD
+    },    deletePhoto(photo) {
+      this.photos = this.photos.filter(p => p.name !== photo.name);
+      this.isViewerOpen = false;
+    },
+
+    /**
+     * Show the create group modal
+     */
+    showCreateGroup() {
+      this.showCreateGroupModal = true;
+      this.newGroupName = '';
+      this.newGroupDescription = '';
+      this.groupCreationError = '';
+      this.groupCreationSuccess = '';
+    },
+
+    /**
+     * Hide the create group modal
+     */
+    hideCreateGroup() {
+      this.showCreateGroupModal = false;
+      this.newGroupName = '';
+      this.newGroupDescription = '';
+      this.groupCreationError = '';
+      this.groupCreationSuccess = '';
+    },
+
+    /**
+     * Create a new group
+     */
+    async createNewGroup() {
+      this.groupCreationError = '';
+      this.groupCreationSuccess = '';
+      
+      // Validate input
+      if (!this.newGroupName || this.newGroupName.trim().length === 0) {
+        this.groupCreationError = 'Group name is required';
+        return;
+      }
+
+      try {
+        this.isCreatingGroup = true;
+        console.log('Creating new group:', this.newGroupName);
+
+        // Call the API using groupService
+        const result = await groupService.createGroup(this.newGroupName, this.newGroupDescription);
+
+        if (result.success) {
+          this.groupCreationSuccess = result.message || 'Group created successfully!';
+          console.log('✅ Group created:', result.group);
+          
+          // Reset form after successful creation
+          setTimeout(() => {
+            this.hideCreateGroup();
+            // You might want to refresh the groups list here
+            // this.loadGroups();
+          }, 2000);
+          
+        } else {
+          this.groupCreationError = result.error || 'Failed to create group';
+          console.error('❌ Group creation failed:', result.error);
+        }
+
+      } catch (error) {
+        this.groupCreationError = error.message || 'An unexpected error occurred';
+        console.error('❌ Group creation error:', error);
+      } finally {
+        this.isCreatingGroup = false;
+      }
+    },
+
+    /**
+     * Handle Enter key in group name input
+     */
+    handleGroupNameEnter() {
+      if (!this.isCreatingGroup) {
+        this.createNewGroup();
+      }
+    },    async fetchUserPhotos() {
+      try {
+        console.log('🔄 Starting to fetch user photos...');
+        this.isLoadingPhotos = true;
+        
+        // Get auth token from auth service instead of localStorage directly
+        const authService = await import('../services/auth.js').then(module => module.default);
+        const token = authService.getIdToken();
+        
+        if (!token) {
+          console.error('❌ No auth token available');
+          return;
+        }
+        
+        console.log('✅ Got auth token, fetching photo metadata...');
+        
+        // Step 1: Fetch photo metadata (with photoId) from backend
+        const metaResponse = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/profile/images', {
+=======
     },
     async deletePhoto(photo) {
       console.log("[Delete Photo] Incoming photo object:", photo);
@@ -493,12 +877,54 @@ export default {
 
         // Fetch photo metadata from backend
         const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/profile/images', {
+>>>>>>> 4a0d7dd004e453dcc0945c93f3d4a92ae72b1387
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         });
+<<<<<<< HEAD
+        
+        console.log('📡 Meta response status:', metaResponse.status);
+        
+        if (!metaResponse.ok) {
+          const errorText = await metaResponse.text();
+          console.error(`❌ Failed to fetch photo metadata: ${metaResponse.status}`, errorText);
+          
+          // If it's an auth error, redirect to login
+          if (metaResponse.status === 401 || metaResponse.status === 403) {
+            console.warn('🔄 Authentication issue, redirecting to login');
+            this.$router.push('/login');
+            return;
+          }
+          
+          throw new Error(`Failed to fetch photo metadata: ${metaResponse.status}`);
+        }
+        
+        const metaResult = await metaResponse.json();
+        console.log('📋 Meta result:', metaResult);
+        
+        if (!metaResult.images || !Array.isArray(metaResult.images)) {
+          console.log("ℹ️ No images found or invalid format - starting with empty photos array");
+          this.photos = [];
+          return;
+        }
+        
+        const photoIds = metaResult.images.map(photo => photo.photoId);
+        console.log('🔍 Found photo IDs:', photoIds);
+        
+        if (!photoIds.length) {
+          console.log('ℹ️ No photos found - user has no uploaded photos yet');
+          this.photos = [];
+          return;
+        }
+        
+        console.log('🔄 Fetching presigned URLs for photos...');
+        
+        // Step 2: Request presigned URLs from backend
+        const urlResponse = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+=======
 
         if (!response.ok) {
           throw new Error(`Failed to fetch photos: ${response.status}`);
@@ -519,6 +945,7 @@ export default {
           return;
         }
         const presignRes = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+>>>>>>> 4a0d7dd004e453dcc0945c93f3d4a92ae72b1387
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -526,6 +953,37 @@ export default {
           },
           body: JSON.stringify({ photoIds }),
         });
+<<<<<<< HEAD
+        
+        console.log('📡 URL response status:', urlResponse.status);
+        
+        if (!urlResponse.ok) {
+          const errorText = await urlResponse.text();
+          console.error(`❌ Failed to fetch presigned URLs: ${urlResponse.status}`, errorText);
+          throw new Error(`Failed to fetch presigned URLs: ${urlResponse.status}`);
+        }
+        
+        const urlResult = await urlResponse.json();
+        console.log('🔗 URL result:', urlResult);
+        
+        const urlArray = urlResult.urls || [];
+        const urlMap = Object.fromEntries(urlArray.map(p => [p.photoId, p.signedUrl]));
+        
+        this.photos = metaResult.images.map(photo => ({
+          ...photo,
+          url: urlMap[photo.photoId] || '',
+        }));
+        
+        console.log("✅ Final photos with backend presigned URLs:", this.photos);
+        console.log(`📊 Loaded ${this.photos.length} photos successfully`);
+        
+      } catch (error) {
+        console.error("❌ Failed to fetch photos:", error);
+        // Don't redirect on photo fetch errors, just show empty state
+        this.photos = [];
+      } finally {
+        this.isLoadingPhotos = false;
+=======
         if (!presignRes.ok) {
           throw new Error(`Failed to get presigned URLs: ${presignRes.status}`);
         }
@@ -546,6 +1004,7 @@ export default {
         console.log("Photos with presigned URLs:", this.photos);
       } catch (error) {
         console.error("Error fetching photos:", error);
+>>>>>>> 4a0d7dd004e453dcc0945c93f3d4a92ae72b1387
       }
     },
     async searchPhotos() {
@@ -618,18 +1077,53 @@ export default {
   async mounted() {
     // Check authentication
     try {
+      console.log('🔄 Dashboard mounted, checking authentication...');
       const authService = await import('../services/auth.js').then(module => module.default);
+      
+      // Check if user is actually authenticated
       const token = authService.getIdToken();
+      console.log('🔍 Token check:', token ? 'Token found' : 'No token found');
+      
       if (!token) {
-        console.warn('Not authenticated, redirecting to login');
-        this.$router.push('/login');
+        console.warn('❌ Not authenticated, redirecting to login');
+        // Clear any stale data and redirect
+        localStorage.clear();
+        this.$router.replace('/login');
+        return;
       }
+      
+      // Try to get current user to verify token is valid
+      try {
+        const user = await authService.getCurrentUser();
+        console.log('✅ Current user:', user);
+        
+        if (!user || !user.id) {
+          console.warn('❌ Invalid user data, redirecting to login');
+          localStorage.clear();
+          this.$router.replace('/login');
+          return;
+        }
+        
+        console.log('✅ User authenticated successfully');
+        this.authChecked = true;
+        
+        // If authenticated, fetch photos
+        console.log('🔄 Fetching photos...');
+        await this.fetchUserPhotos();
+        
+      } catch (userError) {
+        console.error('❌ Token validation failed:', userError);
+        localStorage.clear();
+        this.$router.replace('/login');
+        return;
+      }
+      
     } catch (error) {
-      console.error("Authentication check failed:", error);
-      this.$router.push('/login');
+      console.error("❌ Authentication check failed:", error);
+      localStorage.clear();
+      this.$router.replace('/login');
     }
-  },
-  created() {
+  },created() {
     if (this.$route.query.editedPhoto) {
       const photoName = this.$route.query.originalName;
       const existingIndex = this.photos.findIndex(p => p.name === photoName);
@@ -645,9 +1139,8 @@ export default {
         });
       }
     }
-
-    // Fetch user photos on load
-    this.fetchUserPhotos();
+    
+    // Note: fetchUserPhotos() is now called in mounted() after auth check
   }
 };
 </script>

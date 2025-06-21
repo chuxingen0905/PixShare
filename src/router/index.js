@@ -5,6 +5,8 @@ import Dashboard from '../views/Dashboard.vue'
 import ForgotPassword from '../views/ForgotPassword.vue'
 import Editor from '../views/PhotoEditor.vue'
 import GroupManagementPage from '../views/GroupManagementPage.vue'
+import SharedPhoto from '../views/SharedPhoto.vue'
+import PresignedViewer from '../views/PresignedViewer.vue'
 
 const routes = [
     { path: '/', redirect: '/login' },
@@ -17,6 +19,15 @@ const routes = [
         path: '/groups', 
         name: 'GroupManagement', 
         component: GroupManagementPage 
+    },    {
+        path: '/share/:id',
+        name: 'SharedPhoto',
+        component: SharedPhoto
+    },
+    {
+        path: '/view',
+        name: 'PresignedViewer',
+        component: PresignedViewer
     }
 ]
 
