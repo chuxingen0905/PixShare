@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presigned URL Viewer Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .test-link {
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            margin: 10px 0;
+            transition: background 0.3s;
+        }
+        .test-link:hover {
+            background: #0056b3;
+        }
+        .code-block {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #007bff;
+            font-family: monospace;
+            margin: 15px 0;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .section:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🔗 Presigned URL Viewer Test Page</h1>
+        
+        <div class="section">
+            <h2>📖 How it Works</h2>
+            <p>This page demonstrates the presigned URL viewer functionality. When you click the test link below, it will:</p>
+            <ol>
+                <li>Open the PresignedViewer page</li>
+                <li>Extract the special header from the URL</li>
+                <li>Send a GET request to your API with the header</li>
+                <li>Retrieve and display the presigned URL content</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>🧪 Test Links</h2>
+            <p>Click these links to test the functionality:</p>
+              <a href="http://localhost:5173/view?linkId=ba1f25bccb619e3d" class="test-link" target="_blank">
+                📸 Test with Link ID: ba1f25bccb619e3d
+            </a>
+            <br>
+            
+            <a href="http://localhost:5173/view?linkId=invalid-linkid" class="test-link" target="_blank">
+                ❌ Test with Invalid Link ID
+            </a>
+        </div>
+
+        <div class="section">
+            <h2>🔧 URL Format</h2>            <p>The URL format for accessing the presigned viewer is:</p>
+            <div class="code-block">
+                http://localhost:5173/view?linkId=ba1f25bccb619e3d
+            </div>
+            <p>Where <code>ba1f25bccb619e3d</code> is your link ID value.</p>
+        </div>        <div class="section">
+            <h2>🚀 API Setup Required</h2>
+            <p>To make this work, you need to:</p>
+            <ol>
+                <li><strong>Configure API endpoint:</strong> Ensure GET /photos/sharing endpoint is available</li>                <li><strong>Handle linkId parameter:</strong> Backend should accept and validate linkId query parameter</li>
+                <li><strong>Return presigned URLs:</strong> Backend should map linkId to photo resources and return presigned URLs</li>
+                <li><strong>Set CORS headers:</strong> Ensure the API includes proper CORS headers</li>
+            </ol>
+        </div>        <div class="section">
+            <h2>📋 Example API Response</h2>
+            <p>Your backend API should return a response like this:</p>
+            <div class="code-block">
+{
+  "presignedUrl": "https://your-bucket.s3.amazonaws.com/path/to/photo.jpg?...",
+  "objectKey": "shared-photos/photo-123.jpg",
+  "expiresIn": 3600,
+  "expiresAt": "2025-06-20T15:33:50.278Z",
+  "header": "ba1f25bccb619e3d"
+}
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔍 Debug Information</h2>
+            <p>Check the browser console for detailed logging when testing. The system provides comprehensive debug information including:</p>
+            <ul>
+                <li>Request/response details</li>
+                <li>Header validation</li>
+                <li>API call status</li>
+                <li>Error details</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        console.log('🧪 Presigned URL Viewer Test Page Loaded');        console.log('Available test URLs:');
+        console.log('✅ Valid linkId: http://localhost:5173/view?linkId=ba1f25bccb619e3d');
+        console.log('❌ Invalid linkId: http://localhost:5173/view?linkId=invalid-linkid');
+    </script>
+</body>
+</html>
