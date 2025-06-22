@@ -86,25 +86,43 @@
             </button>
           </div>
         </div>
-        <!-- Exprot Section -->
-      <div>
+        <!-- Exprot Section -->      <div>
         <h2 class="text-lg font-semibold mb-2 flex items-center">
           <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
           </svg>
-          Export
+          Save Options
         </h2>
-        <div class="grid grid-cols-2 gap-2">
-          <button @click="saveImage('png')" class="tool-btn">
-            Save as PNG
-          </button>
-          <button @click="saveImage('jpeg')" class="tool-btn">
-            Save as JPEG
-          </button>
-          <button @click="saveImage('webp')" class="tool-btn">
-            Save as WebP
-          </button>
-          <button @click="saveAndReturn" class="tool-btn bg-green-100 hover:bg-green-200">
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Choose Format</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button 
+              @click="setOutputFormat('jpeg')" 
+              class="p-2 border rounded text-center text-sm" 
+              :class="outputFormat === 'jpeg' ? 'bg-blue-100 border-blue-400' : 'bg-white'"
+            >
+              JPEG
+            </button>
+            <button 
+              @click="setOutputFormat('png')" 
+              class="p-2 border rounded text-center text-sm" 
+              :class="outputFormat === 'png' ? 'bg-blue-100 border-blue-400' : 'bg-white'"
+            >
+              PNG
+            </button>
+            <button 
+              @click="setOutputFormat('webp')" 
+              class="p-2 border rounded text-center text-sm" 
+              :class="outputFormat === 'webp' ? 'bg-blue-100 border-blue-400' : 'bg-white'"
+            >
+              WebP
+            </button>
+          </div>
+        </div>        <div class="mb-1">
+          <button @click="saveWithOptions('return')" class="w-full py-3 bg-green-100 hover:bg-green-200 rounded-md flex items-center justify-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+            </svg>
             Save & Return
           </button>
         </div>
@@ -113,17 +131,43 @@
     </div>
 
     <!-- Main Editing Area -->
-    <div class="flex-1 bg-white p-4 rounded-lg shadow flex flex-col">
-      <!-- Image Display -->
+    <div class="flex-1 bg-white p-4 rounded-lg shadow flex flex-col">      <!-- Image Display -->
       <div class="flex-1 flex items-center justify-center bg-gray-50 rounded-lg overflow-hidden relative">
-        <div v-if="!isCropping" class="relative w-full h-full">
-          <img
-            ref="image"
-            :src="photo"
-            class="max-w-full max-h-[70vh] object-contain"
-            :style="imageStyle"
-            crossorigin="anonymous"
-          />
+        <!-- Loading indicator -->
+        <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-50">
+          <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+            <p class="mt-2 text-gray-700">Loading image...</p>
+          </div>
+        </div>
+        
+        <!-- Error message -->
+        <div v-if="loadError" class="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-50">
+          <div class="text-center p-6 max-w-md">
+            <div class="text-red-500 mb-2">
+              <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900">Failed to load image</h3>
+            <p class="mt-2 text-gray-600">{{ errorMessage || 'Unable to load image. This may be due to permissions or CORS restrictions.' }}</p>
+            <div class="mt-4">
+              <router-link to="/dashboard" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                Return to dashboard
+              </router-link>
+            </div>
+          </div>
+        </div>
+          <div v-if="!isCropping" class="relative w-full h-full flex items-center justify-center">
+          <!-- Fixed size container for consistent display -->          <div class="image-container">
+            <img
+              ref="image"
+              :src="photo"
+              class="editor-image"
+              :style="[imageStyle, { width: displayWidth + 'px', height: 'auto', maxHeight: '70vh' }]"
+              crossorigin="anonymous"
+            />
+          </div>
           <div 
             v-for="(text, index) in textElements" 
             :key="index"
@@ -145,16 +189,16 @@
           >
             {{ text.content }}
           </div>
-        </div>
-
-        <!-- Cropping Interface -->
+        </div>        <!-- Cropping Interface -->
         <div v-if="isCropping" class="w-full h-full flex items-center justify-center">
-          <img
-            ref="cropImage"
-            :src="photo"
-            class="max-w-full max-h-[70vh]"
-            crossorigin="anonymous"
-          />
+          <div class="image-container">            <img
+              ref="cropImage"
+              :src="photo"
+              class="editor-image"
+              :style="{ width: displayWidth + 'px', height: 'auto', maxHeight: '70vh' }"
+              crossorigin="anonymous"
+            />
+          </div>
         </div>
       </div>
 
@@ -415,25 +459,111 @@
               class="px-3 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
             >
               Save
-            </button>
-          </div>
+            </button>          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+  <!-- Rename Photo Modal -->
+  <div 
+    v-if="isRenameModalOpen" 
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+  >
+    <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+      <h2 class="text-xl font-bold mb-4 text-gray-800">Save Edited Photo</h2>
+      
+      <!-- Error Message -->
+      <div v-if="errorMessage" class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+        {{ errorMessage }}
+      </div>
+
+      <!-- Photo Name Input -->
+      <div class="mb-4">
+        <label for="photoName" class="block text-sm font-medium text-gray-700 mb-2">
+          Photo Name <span class="text-red-500">*</span>
+        </label>
+        <input
+          id="photoName"
+          v-model="newPhotoName"
+          type="text"
+          placeholder="Enter photo name"
+          maxlength="100"
+          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          :disabled="isLoading"
+          @keyup.enter="confirmSaveWithName"
+        />
+        <p class="text-sm text-gray-500 mt-1">{{ newPhotoName.length }}/100 characters</p>
+      </div>
+      
+      <!-- File Format Selection -->
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-700 mb-2">Format</label>
+        <div class="flex space-x-4">
+          <label class="inline-flex items-center">
+            <input type="radio" v-model="outputFormat" value="jpeg" class="form-radio text-blue-500">
+            <span class="ml-2">JPEG</span>
+          </label>
+          <label class="inline-flex items-center">
+            <input type="radio" v-model="outputFormat" value="png" class="form-radio text-blue-500">
+            <span class="ml-2">PNG</span>
+          </label>
+          <label class="inline-flex items-center">
+            <input type="radio" v-model="outputFormat" value="webp" class="form-radio text-blue-500">
+            <span class="ml-2">WebP</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex justify-end gap-3">
+        <button
+          @click="cancelSave"
+          class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200"
+          :disabled="isLoading"
+        >
+          Cancel
+        </button>
+        <button
+          @click="confirmSaveWithName"
+          :disabled="isLoading || !newPhotoName.trim()"
+          class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-2"
+        >
+          <svg v-if="isLoading" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          {{ isLoading ? 'Saving...' : 'Save Photo' }}
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
+// Import auth service for API authentication
+import authService from '../services/auth.js';
 
-export default {
-  data() {
-  return {
+export default {  data() {  return {
       // Image source and history management
-      photo: this.$route.query.photo || '/assets/default.jpg',
+      photo: '',
       imageHistory: [],
       historyIndex: -1,
       originalPhotoBeforeBgRemoval: null,
+      // New photo ID property
+      photoId: null,
+      // Loading and error states
+      isLoading: false,
+      loadError: false,
+      errorMessage: null,
+      urlRefreshAttempted: false,
+      
+      // Rename dialog
+      isRenameModalOpen: false,
+      newPhotoName: '',
+      originalPhotoName: '',
+      editedPhotoDataUrl: null,
       
       // Tool states
       currentTool: null,
@@ -501,11 +631,8 @@ export default {
       dragStartX: 0,
       dragStartY: 0,
       textStartX: 0,
-      textStartY: 0,
-      
-      // Output/save options
-      outputFormat: 'jpeg',
-      outputQuality: 90
+      textStartY: 0,      // Output/save options
+      outputFormat: 'jpeg' // Default format
     };
   },
   computed: {
@@ -519,6 +646,16 @@ export default {
         `,
         transform: `rotate(${this.currentRotation}deg)`
       };
+    },
+    displayWidth() {
+      // If no image is loaded yet, return a default size
+      if (!this.originalWidth) return 600;
+      
+      // Calculate a responsive display width that fits well in the editor
+      // Maximum display width (pixels)
+      const maxDisplayWidth = 900;
+      // For very large images, scale them down to fit the editor
+      return Math.min(this.originalWidth, maxDisplayWidth);
     },
     brightness: {
       get() { return this.adjustmentValues.brightness; },
@@ -536,8 +673,355 @@ export default {
       get() { return this.adjustmentValues.saturation; },
       set(val) { this.adjustmentValues.saturation = val; }
     }
-  },
-  methods: {
+  },  methods: {    showErrorMessage(message) {
+      this.errorMessage = message;
+      // Using errorMessage instead of alert for better UX
+      this.loadError = true;
+      console.error(message);
+    },
+    
+    /**
+     * Get a presigned URL for a photo from the API
+     * @param {string} photoId - The ID of the photo to get a presigned URL for
+     * @returns {Promise<string|null>} - The presigned URL or null if an error occurred
+     */
+    async getPresignedUrl(photoId) {
+      try {
+        if (!photoId) {
+          console.warn('No photo ID provided');
+          return null;
+        }
+        
+        console.log('Fetching presigned URL for photo ID:', photoId);
+        
+        // Ensure token is valid before making the request
+        await authService.ensureValidToken();
+        const token = authService.getIdToken();
+        
+        if (!token) {
+          console.error('No authentication token available');
+          throw new Error('You must be logged in to view photos');
+        }
+        
+        const res = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ photoIds: [photoId] }),
+        });
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error('API error fetching presigned URL:', res.status, errorText);
+          throw new Error(`Failed to fetch presigned URL: ${res.status} ${res.statusText}`);
+        }
+        
+        const result = await res.json();
+        const url = result.urls?.[0]?.signedUrl;
+        
+        if (!url) {
+          console.error('No presigned URL returned from API');
+          throw new Error('No presigned URL returned from API');
+        }
+        
+        console.log('Successfully fetched presigned URL');
+        return url;
+      } catch (error) {
+        console.error('Error getting presigned URL:', error);
+        this.showErrorMessage(error.message || 'Failed to get access to the photo');
+        return null;
+      }
+    },
+    
+    /**
+     * Properly decode and validate a presigned S3 URL
+     * This handles issues with URL encoding in presigned AWS URLs
+     * @param {string} url The URL to sanitize
+     * @return {string} The sanitized URL
+     */
+    sanitizePresignedUrl(url) {
+      if (!url || typeof url !== 'string') {
+        return url;
+      }
+      
+      try {
+        // First, check if this is an S3 URL with encoded parameters
+        if (url.includes('amazonaws.com') && 
+           (url.includes('%3F') || url.includes('%26') || url.includes('%3D'))) {
+          console.log('Found encoded S3 URL parameters, decoding...');
+          return decodeURIComponent(url);
+        }
+        
+        // If it contains amazon but regular encoded chars like %2F, still decode
+        if (url.includes('amazonaws.com') && url.includes('%')) {
+          return decodeURIComponent(url);
+        }
+        
+        // Otherwise return as is - it's either not an S3 URL or already decoded
+        return url;
+      } catch (error) {
+        console.warn('Error sanitizing URL, returning original:', error);
+        return url;
+      }
+    },
+    
+    async checkAndRefreshPresignedUrl(url) {
+      if (!url) return null;
+      
+      try {
+        const urlObj = new URL(url);
+        const linkId = urlObj.searchParams.get('linkId');
+        
+        if (!linkId) {
+          // If we don't have a linkId but we do have a photoId, use our direct method
+          if (this.photoId) {
+            console.log('No linkId found in URL, using photoId to refresh:', this.photoId);
+            return await this.getPresignedUrl(this.photoId);
+          }
+          
+          console.warn('No linkId found in URL and no photoId available, cannot refresh');
+          return url; // Return original URL
+        }
+        
+        console.log('Attempting to refresh presigned URL with linkId:', linkId);
+        
+        // Import service dynamically to avoid circular dependencies
+        const presignedService = await import('../services/presignedUrlService');
+        const response = await presignedService.getPresignedUrl(linkId);
+        
+        if (response.success && response.presignedUrl) {
+          console.log('Successfully refreshed presigned URL');
+          return response.presignedUrl;
+        } else {
+          console.error('Failed to refresh presigned URL:', response.error);
+          return url; // Return original URL as fallback
+        }
+      } catch (error) {
+        console.error('Error refreshing presigned URL:', error);
+        return url; // Return original URL as fallback
+      }    },      async loadImageWithCorsHandling() {
+      // First check if we have a photoId in the route
+      this.photoId = this.$route.query.photoId || null;
+      let sourceUrl = null;
+      
+      // Always prioritize photoId if available
+      if (this.photoId) {
+        console.log('Photo ID found in route, fetching presigned URL:', this.photoId);
+        sourceUrl = await this.getPresignedUrl(this.photoId);
+        
+        if (!sourceUrl) {
+          this.showErrorMessage('Failed to get access to the photo. Please try again.');
+          return;
+        }
+      } 
+      // Fallback to direct URL only if no photoId is available (legacy support)
+      else if (this.$route.query.photo) {
+        console.warn('No photoId provided, falling back to direct URL (not recommended)');
+        sourceUrl = this.$route.query.photo;
+      }
+      // No photo information available
+      else {
+        console.error('No photo ID or URL provided in route query');
+        this.showErrorMessage('No photo information provided. Please select a photo from the dashboard.');
+        return;
+      }
+      
+      // Properly sanitize and decode the URL to handle encoded characters in presigned URLs
+      sourceUrl = this.sanitizePresignedUrl(sourceUrl);
+      console.log('Sanitized source URL');
+      
+      // Check for common URL formatting issues
+      if (sourceUrl && sourceUrl.includes('amazonaws.com') && !sourceUrl.includes('?')) {
+        console.warn('Potentially malformed S3 URL - missing query parameters');
+      }
+      
+      console.log('Loading image from:', sourceUrl);
+      
+      // Set loading state
+      this.isLoading = true;
+      this.loadError = false;
+      
+      // Check if the URL is a presigned URL and verify it's still valid
+      try {
+        // If we get a 403/401 error, it might be because the presigned URL expired
+        if (sourceUrl.includes('amazonaws.com') && 
+           (sourceUrl.includes('X-Amz-') || sourceUrl.includes('Signature=') || sourceUrl.includes('AWSAccessKeyId='))) {
+          console.log('Detected presigned URL, checking if it needs refreshing...');
+          const refreshedUrl = await this.checkAndRefreshPresignedUrl(sourceUrl);
+          if (refreshedUrl && refreshedUrl !== sourceUrl) {
+            console.log('URL was refreshed, using new presigned URL');
+            sourceUrl = refreshedUrl;
+          }
+        }
+      } catch (error) {
+        console.error('Error during URL refresh check:', error);
+      }
+      
+      // First try direct loading with Image object
+      const directImg = new Image();
+      directImg.crossOrigin = 'anonymous'; // This is important for S3 URLs
+      
+      // Set timeout to catch hanging loads
+      const imageLoadTimeout = setTimeout(() => {
+        console.warn('Image load timeout - possible CORS or network issue');
+        // Don't call onerror if we're already loading with another method
+        if (this.isLoading && directImg.src) {
+          directImg.src = ''; // Cancel the current load
+          directImg.onerror(new Error('Load timeout'));
+        }
+      }, 10000); // 10 second timeout
+      
+      // Set up direct loading handlers
+      directImg.onload = () => {
+        console.log('Image loaded directly successfully');
+        clearTimeout(imageLoadTimeout);
+        
+        // Use blob URL approach for all images to ensure consistent behavior
+        // This creates a local copy of the image for editing
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = directImg.width;
+          canvas.height = directImg.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(directImg, 0, 0);
+          
+          // Use a blob for better memory management with large images
+          canvas.toBlob((blob) => {
+            const localUrl = URL.createObjectURL(blob);
+            this.photo = localUrl;
+            this.originalWidth = directImg.width;
+            this.originalHeight = directImg.height;
+            this.aspectRatio = directImg.width / directImg.height;
+            this.isLoading = false;
+            
+            // Save to history as the initial state
+            if (this.imageHistory.length === 0) {
+              this.saveToHistory();
+            }
+          }, 'image/png');
+        } catch (err) {
+          console.error('Error creating local image copy:', err);
+          // Fallback to direct URL if canvas approach fails
+          this.photo = sourceUrl;
+          this.originalWidth = directImg.width;
+          this.originalHeight = directImg.height;
+          this.aspectRatio = directImg.width / directImg.height;
+          this.isLoading = false;
+          
+          // Save to history as the initial state
+          if (this.imageHistory.length === 0) {
+            this.saveToHistory();
+          }
+        }
+      };
+      
+      directImg.onerror = async (e) => {
+        console.log('Direct image loading failed, trying fetch API...', e);
+        
+        // Try fetch as a fallback (might work in some cases where CORS is configured)
+        try {
+          // Use proper fetch configuration to handle CORS properly
+          const response = await fetch(sourceUrl, {
+            method: 'GET',
+            mode: 'cors', // Try with explicit CORS mode
+            credentials: 'omit' // Don't send cookies to S3
+          });
+          console.log('Fetch response status:', response.status);
+          
+          if (!response.ok) {
+            // Handle specific error cases
+            if (response.status === 403) {
+              console.error('Access denied (403 Forbidden) - Presigned URL may have expired');
+              
+              // Try to refresh the URL one more time using our methods
+              if (!this.urlRefreshAttempted) {
+                console.log('Attempting to refresh URL after 403 error');
+                this.urlRefreshAttempted = true;
+                
+                let refreshedUrl = null;
+                
+                // Try refreshing via photoId first if available (most reliable)
+                if (this.photoId) {
+                  console.log('Attempting to fetch fresh URL using photo ID:', this.photoId);
+                  refreshedUrl = await this.getPresignedUrl(this.photoId);
+                } else {
+                  // Fall back to the legacy method if photoId is not available
+                  refreshedUrl = await this.checkAndRefreshPresignedUrl(sourceUrl);
+                }
+                
+                if (refreshedUrl && refreshedUrl !== sourceUrl) {
+                  console.log('URL was refreshed after 403, trying again with new URL');
+                  this.photo = refreshedUrl;
+                  directImg.src = refreshedUrl;  // Try the direct loading again with new URL
+                  return; // Exit the current error handler to avoid showing error message
+                }
+              }
+              
+              throw new Error('Access denied. The photo link may have expired or you do not have permission.');
+            } else if (response.status === 404) {
+              throw new Error('The photo could not be found on the server.');
+            } else if (response.status === 401) {
+              console.error('Authentication error (401 Unauthorized)');
+              throw new Error('Authentication error. Please log in again and try once more.');
+            } else {
+              throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+            }
+          }
+          
+          const blob = await response.blob();
+          console.log('Blob received:', blob.type, 'size:', blob.size);
+          
+          if (blob.size === 0) {
+            throw new Error('Received empty blob data. The server may have returned an empty response.');
+          }
+          
+          // Create a local URL for the blob
+          const localUrl = URL.createObjectURL(blob);
+          console.log('Created local URL:', localUrl);
+          this.photo = localUrl;
+          this.isLoading = false;
+          
+          // Load the image dimensions
+          const img = new Image();
+          img.onload = () => {
+            this.originalWidth = img.width;
+            this.originalHeight = img.height;
+            this.aspectRatio = img.width / img.height;
+            console.log('Image loaded successfully:', img.width, 'x', img.height);
+            
+            // Save to history as initial state if not already done
+            if (this.imageHistory.length === 0) {
+              this.saveToHistory();
+            }
+          };
+          
+          img.onerror = (error) => {
+            console.error('Error loading image from blob URL:', error);
+            this.loadError = true;
+            this.isLoading = false;
+            this.showErrorMessage('Unable to load the image properly. The image format may not be supported.');
+          };
+          
+          img.src = localUrl;
+        } catch (error) {
+          console.error('Error fetching image:', error);
+          this.loadError = true;
+          this.isLoading = false;
+          this.showErrorMessage(error.message || 'Error loading the photo. The URL may be expired or the server may have CORS restrictions.');
+          
+          // For debugging help in the console
+          console.log('Source URL that failed:', sourceUrl);
+          console.log('Error details:', error);
+        }
+      };
+      
+      // Start direct loading attempt with the sanitized URL
+      directImg.src = sourceUrl;
+      console.log('Started direct image loading with crossOrigin=anonymous');
+    },
+    
     activateTool(tool) {
       this.isCropping = false;
       this.rotationChanged = false;
@@ -831,22 +1315,9 @@ export default {
             size: this.currentText.size
         };
         }
-    },
-
-    cancelText() {
+    },    cancelText() {
         this.currentTool = null;
         this.activeTextIndex = null;
-    },
-
-    editText(index) {
-        this.currentTool = 'text';
-        this.activeTextIndex = index;
-        const text = this.textElements[index];
-        this.currentText = {
-            content: text.content,
-            color: text.color,
-            size: text.size
-        };
     },
 
     startTextDrag(e, index) {
@@ -941,57 +1412,19 @@ export default {
     cancelBackground() {
       this.undoBgRemoval();
       this.currentTool = null;
-    },
-
-    saveBackgroundChange() {
+    },    saveBackgroundChange() {
       this.saveToHistory(); // Save to your undo history
       this.bgRemovalActive = false;
       this.currentTool = null;
     },
 
-    // Save Image
-    saveImage(format) {
+    // Save Image    // Set output format and update UI
+    setOutputFormat(format) {
+      this.outputFormat = format;
+    },    // Save and return to previous screen with the edited image
+    saveWithOptions(action) {
       const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        
-        // Apply all edits
-        ctx.filter = `
-          brightness(${this.adjustmentValues.brightness}%) 
-          contrast(${this.adjustmentValues.contrast}%) 
-          blur(${this.adjustmentValues.blur}px)
-          saturate(${this.adjustmentValues.saturation}%)
-        `;
-        
-        ctx.drawImage(img, 0, 0);
-        ctx.filter = 'none';
-
-      // Draw text elements
-      this.textElements.forEach(text => {
-        ctx.font = `${text.size}px ${text.font}`;
-        ctx.fillStyle = text.color;
-        ctx.fillText(text.content, text.x, text.y);
-      });
-
-        // Convert to desired format
-        const mimeType = `image/${format}`;
-        const dataUrl = canvas.toDataURL(mimeType, 0.9);
-        
-        // Download the image
-        const link = document.createElement('a');
-        link.download = `edited-image.${format}`;
-        link.href = dataUrl;
-        link.click();
-      };
-      img.src = this.photo;
-    },
-
-    saveAndReturn() {
-      const img = new Image();
-      img.onload = () => {
+      img.onload = async () => {
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
@@ -1015,32 +1448,209 @@ export default {
           ctx.fillText(text.content, text.x, text.y);
         });
         
-        // Get the edited image data
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        // Set default quality based on format
+        let quality;
+        if (this.outputFormat === 'jpeg') {
+          quality = 0.9; // 90% quality for JPEG
+        } else if (this.outputFormat === 'webp') {
+          quality = 0.85; // 85% quality for WebP
+        }
         
-        // Return to dashboard with the edited image
-        this.$router.push({
-          path: '/dashboard',
-          query: { 
-            editedPhoto: dataUrl,
-            originalName: this.$route.query.name || 'edited-image.jpg'
+        // Get the edited image data
+        const mimeType = `image/${this.outputFormat}`;
+        const dataUrl = canvas.toDataURL(mimeType, quality);
+        
+        // Store the dataUrl for later use
+        this.editedPhotoDataUrl = dataUrl;
+        
+        // Get original name and suggest a new one
+        const originalName = this.$route.query.name || `image.${this.outputFormat}`;
+        this.originalPhotoName = originalName;
+        
+        // Suggest a new filename with "edited-" prefix
+        let suggestedName = originalName;
+        if (suggestedName.includes('.')) {
+          const baseName = suggestedName.substring(0, suggestedName.lastIndexOf('.'));
+          const ext = this.outputFormat;
+          
+          // If name already has "edited" in it, don't add it again
+          if (baseName.toLowerCase().includes('edited')) {
+            suggestedName = `${baseName}.${ext}`;
+          } else {
+            // Add timestamp to make name unique
+            const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            suggestedName = `${baseName}-edited-${timestamp}.${ext}`;
           }
-        });
+        } else {
+          suggestedName = `${suggestedName}-edited.${this.outputFormat}`;
+        }
+        
+        this.newPhotoName = suggestedName;
+        
+        // Open the rename modal
+        this.isRenameModalOpen = true;
       };
       img.src = this.photo;
     },
-
-  // Update tool apply methods to be consistent
-  applyTool() {
-    if (this.currentTool === 'crop') this.saveCrop();
-    else if (this.currentTool === 'rotate') this.saveRotation();
-    else if (this.currentTool === 'resize') this.saveResize();
-    else if (this.currentTool === 'text') this.addText();
-    else if (this.currentTool === 'background') this.removeBackground();
-    else this.saveAdjustment();
+    
+    // Cancel the save operation
+    cancelSave() {
+      this.isRenameModalOpen = false;
+      this.editedPhotoDataUrl = null;
+      this.errorMessage = null;
+    },
+    
+    // Confirm the save with the new name
+    async confirmSaveWithName() {
+      if (!this.newPhotoName.trim()) {
+        this.errorMessage = "Photo name cannot be empty";
+        return;
+      }
+      
+      if (!this.editedPhotoDataUrl) {
+        this.errorMessage = "No edited image data available";
+        return;
+      }
+      
+      this.isLoading = true;
+      this.errorMessage = null;
+      
+      try {
+        // Ensure the filename has the correct extension
+        let filename = this.newPhotoName;
+        if (!filename.toLowerCase().endsWith(`.${this.outputFormat}`)) {
+          const baseName = filename.includes('.') 
+            ? filename.substring(0, filename.lastIndexOf('.')) 
+            : filename;
+          filename = `${baseName}.${this.outputFormat}`;
+        }
+        
+        // Convert dataURL to blob
+        const fetchResponse = await fetch(this.editedPhotoDataUrl);
+        const blob = await fetchResponse.blob();
+        
+        // Create a File object from the blob
+        const mimeType = `image/${this.outputFormat}`;
+        const file = new File([blob], filename, { type: mimeType });
+        
+        // Upload the file as a new photo
+        await this.uploadEditedPhoto(file);
+        
+        // Navigate to dashboard with a flag to refresh the photos
+        this.$router.push({
+          path: '/dashboard',
+          query: { 
+            refreshPhotos: 'true',
+            timestamp: Date.now() // Add timestamp to prevent caching
+          }
+        });
+      } catch (error) {
+        console.error('Error uploading edited photo:', error);
+        this.errorMessage = error.message || 'Failed to upload the edited photo. Please try again.';
+        this.isLoading = false;
+      }
+    },
+    
+    // Upload the edited photo
+    async uploadEditedPhoto(file) {
+      try {
+        // Show loading state
+        this.isLoading = true;
+        
+        // Read file as base64
+        const base64Image = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            // Get only the base64 part (remove data:image/jpeg;base64, prefix)
+            resolve(e.target.result.split(',')[1]);
+          };
+          reader.readAsDataURL(file);
+        });
+        
+        // Ensure token is valid
+        await authService.ensureValidToken();
+        const token = authService.getIdToken();
+        if (!token) {
+          throw new Error("Authentication token not available. Please log in again.");
+        }
+        
+        // Get current user ID
+        const user = await authService.getCurrentUser();
+        if (!user || !user.id) {
+          throw new Error("User ID not available. Please log in again.");
+        }
+        
+        // Upload to backend
+        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            photoName: file.name,
+            photoBase64: base64Image,
+            metadata: {
+              size: file.size,
+              type: file.type,
+              isEdited: true,
+              originalPhotoId: this.photoId || null
+            }
+          }),
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Upload failed:", errorText);
+          throw new Error(`Upload failed with status ${response.status}`);
+        }
+        
+        // Parse successful result
+        const result = await response.json();
+        console.log("Edited photo uploaded successfully:", result);
+        return result;
+      } catch (error) {
+        console.error("Error uploading edited photo:", error);
+        throw error;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+      // Legacy method for backward compatibility
+    saveAndReturn() {
+      this.saveWithOptions('return');
+    },
+    
+    // Generate a unique filename adding a timestamp
+    generateUniqueFilename(baseName, extension) {
+      const timestamp = new Date().toISOString()
+        .replace(/[-:]/g, '')
+        .replace('T', '-')
+        .split('.')[0];
+      return `${baseName}-${timestamp}.${extension}`;
+    },
+    
+    // Update tool apply methods to be consistent
+    applyTool() {
+      if (this.currentTool === 'crop') this.saveCrop();
+      else if (this.currentTool === 'rotate') this.saveRotation();
+      else if (this.currentTool === 'resize') this.saveResize();
+      else if (this.currentTool === 'text') this.addText();
+      else if (this.currentTool === 'background') this.removeBackground();
+      else this.saveAdjustment();
+    },
+    
+    // Method missing from original code
+    saveToHistory() {
+      // Create a copy for history
+      this.imageHistory = this.imageHistory.slice(0, this.historyIndex + 1);
+      this.imageHistory.push(this.photo);
+      this.historyIndex = this.imageHistory.length - 1;
+    }
   },
-
   mounted() {
+    // Load Cropper library if not already loaded
     if (!window.Cropper) {
       const script = document.createElement('script');
       script.src = 'https://cdn.jsdelivr.net/npm/cropperjs@1.5.12/dist/cropper.min.js';
@@ -1051,46 +1661,118 @@ export default {
       link.href = 'https://cdn.jsdelivr.net/npm/cropperjs@1.5.12/dist/cropper.min.css';
       document.head.appendChild(link);
     }
-    
-    // Load the original image dimensions
-    const img = new Image();
-    img.onload = () => {
-      this.originalWidth = img.width;
-      this.originalHeight = img.height;
-      this.aspectRatio = img.width / img.height;
-    };
-    img.src = this.photo;
+      // Check if we have a photoId (preferred) or photo URL (legacy) in the route query
+    if (this.$route.query.photoId) {
+      console.log('Photo ID found in route:', this.$route.query.photoId);
+      this.loadImageWithCorsHandling();
+    } 
+    else if (this.$route.query.photo) {
+      console.warn('No photoId provided but found direct URL (legacy mode):', {
+        photoUrl: this.$route.query.photo.substring(0, 50) + '...' // Log truncated URL for privacy
+      });
+      this.loadImageWithCorsHandling();
+    } 
+    else {
+      console.error('No photo ID or URL provided in route query');
+      this.showErrorMessage('No photo information provided. Please select a photo from the dashboard.');
+    }
   },
-},
-};
+  beforeUnmount() {
+    // Clean up any object URLs to prevent memory leaks
+    if (this.photo && this.photo.startsWith('blob:')) {
+      console.log('Cleaning up object URL:', this.photo);
+      URL.revokeObjectURL(this.photo);
+    }
+    
+    // Clean up any loaded cropper instance
+    if (this.cropper) {
+      this.cropper.destroy();
+      this.cropper = null;
+    }
+  },
+}
 </script>
 
 <style scoped>
 .tool-btn {
-  @apply bg-gray-100 text-sm px-3 py-2 rounded hover:bg-gray-200 w-full flex items-center justify-center transition-colors;
+  background-color: #f3f4f6;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.25rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.tool-btn:hover {
+  background-color: #e5e7eb;
 }
 
 .btn-primary {
-  @apply bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center justify-center transition-colors;
+  background-color: #2563eb;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: #1d4ed8;
 }
 
 .btn-secondary {
-  @apply bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 flex items-center justify-center transition-colors;
+  background-color: #e5e7eb;
+  color: #1f2937;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: #d1d5db;
 }
 
 .btn-rotate {
-  @apply bg-gray-100 text-gray-800 p-2 rounded hover:bg-gray-200 transition-colors;
+  background-color: #f3f4f6;
+  color: #1f2937;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  transition: background-color 0.2s;
+}
+
+.btn-rotate:hover {
+  background-color: #e5e7eb;
 }
 
 .image-container {
   position: relative;
   max-width: 100%;
   max-height: 70vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  margin: 0 auto;
+}
+
+.editor-image {
+  object-fit: contain;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
 }
 
 /* Custom range input styles */
 input[type="range"] {
   -webkit-appearance: none;
+  appearance: none;
   height: 6px;
   background: #e5e7eb;
   border-radius: 3px;
@@ -1137,5 +1819,20 @@ input[type="range"]::-webkit-slider-thumb {
   left: 0;
   pointer-events: none;
   z-index: 20;
+}
+
+/* Additional Cropper.js overrides */
+:deep(.cropper-view-box),
+:deep(.cropper-face) {
+  border-radius: 0;
+}
+
+:deep(.cropper-view-box) {
+  outline: 1px solid #3b82f6;
+  outline-color: rgba(59, 130, 246, 0.75);
+}
+
+:deep(.cropper-line) {
+  background-color: #3b82f6;
 }
 </style>

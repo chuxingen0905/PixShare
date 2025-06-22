@@ -1,12 +1,11 @@
-<template>
-  <aside class="w-60 h-screen p-6 bg-gradient-to-b from-blue-900 via-blue-800 to-blue-700 shadow-xl">
+<template>  <aside class="w-60 h-full min-h-screen sticky top-0 p-6 bg-gradient-to-b from-blue-900 via-blue-800 to-blue-700 shadow-xl flex flex-col border-r border-blue-900">
     <!-- Heading -->
     <div class="mb-8">
       <h1 class="text-xl font-bold text-white">PixShare</h1>
     </div>
 
     <!-- Navigation -->
-    <nav>
+    <nav class="flex-grow">
       <ul class="space-y-4">
         <li>
           <router-link to="/dashboard" class="flex items-center space-x-3 text-blue-100 hover:text-white transition font-medium">

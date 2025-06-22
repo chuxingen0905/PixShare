@@ -1,10 +1,10 @@
 <template>
-  <div class="flex min-h-screen bg-blue-50">
+  <div class="flex min-h-screen h-screen bg-blue-50 overflow-hidden">
     <!-- Sidebar -->
     <Sidebar />
 
     <!-- Main Content -->
-    <div class="flex-1 px-6 py-4">
+    <div class="flex-1 px-6 py-4 overflow-y-auto">
       
       <!-- Header -->
     <div class="flex justify-between items-center mb-6">
@@ -156,19 +156,16 @@
             </ul>
           </div>
         </div>
-      </div>
-
-      <!-- Photo Viewer Modal -->
+      </div>      <!-- Photo Viewer Modal -->
       <PhotoViewer
         v-if="selectedPhoto && isViewerOpen && !isShareModalOpen"
         :visible="isViewerOpen"
         :photo="selectedPhoto"
-        @close="isViewerOpen = false"
-        @download="downloadPhoto"
+        @close="isViewerOpen = false"        @download="downloadPhoto"
         @edit="goToEditor"
         @share="openShareModal"
         @delete="deletePhoto"
-      />      <!-- Photo Grid -->
+      /><!-- Photo Grid -->
       <div v-if="!authChecked || isLoadingPhotos" class="text-center text-blue-500 text-lg mt-16">
         <div class="flex items-center justify-center">
           <svg class="animate-spin h-8 w-8 mr-3" fill="none" viewBox="0 0 24 24">
@@ -182,22 +179,38 @@
       </div>
       <div v-else-if="filteredPhotos.length === 0" class="text-center text-blue-500 text-lg mt-16">
         No photos found. Upload or change your search.
-      </div>
-      <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      </div>      <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 p-2">
         <div
           v-for="(photo, index) in filteredPhotos"
           :key="index"
           @click="openViewer(photo)"
-          class="relative group cursor-pointer aspect-square overflow-hidden bg-blue-100 rounded-lg shadow hover:shadow-lg transition"
-        >          <img
-            :src="photo.url"
-            :alt="photo.PhotoName || photo.photoName || photo.name || 'Photo'"
-            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-          <div v-if="photo.shared" class="absolute top-2 right-2 bg-blue-500 text-white p-1 rounded-full">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-            </svg>        </div>
+          class="photo-card cursor-pointer bg-white rounded-lg shadow hover:shadow-lg transition flex flex-col overflow-hidden"
+        >
+          <div class="aspect-square w-full relative flex items-center justify-center bg-gray-100 overflow-hidden">
+            <img
+              v-if="photo.url"
+              :src="photo.url"
+              :alt="photo.name || photo.PhotoName || photo.photoName || 'Photo'"
+              class="w-full h-full object-cover absolute inset-0 group-hover:scale-105 transition-transform duration-300"
+              @load="photo.loaded = true"
+              @error="handleImageError($event, photo)"
+              loading="lazy"
+            />
+            <div v-else class="flex items-center justify-center h-full w-full text-gray-400">
+              <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div v-if="photo.shared" class="absolute top-2 right-2 bg-blue-500 text-white p-1 rounded-full">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+            </div>
+          </div>
+          <div class="p-2 text-center text-sm font-medium text-gray-700 truncate border-t border-gray-100" :title="photo.name || photo.PhotoName || photo.photoName || 'Photo'">
+            {{ photo.name || photo.PhotoName || photo.photoName || 'Photo' }}
+          </div>
+        </div>
       </div>
     </div>
 
@@ -275,10 +288,8 @@
             </svg>
             {{ isCreatingGroup ? 'Creating...' : 'Create Group' }}
           </button>
-        </div>
-      </div>
-    </div>
-  </div>
+        </div>      </div>    </div>
+  
   </div>
 </template>
 
@@ -290,36 +301,42 @@ import shareService from '../services/shareService.js';
 import groupService from '../services/groupService.js';
 
 export default {
-  components: { Sidebar, PhotoViewer, GroupManagement },
+  components: { Sidebar, PhotoViewer, GroupManagement },  
   data() {
     return {
       photos: [], // Empty array, will fetch from AWS
       searchQuery: '',
       selectedPhoto: null,
-      isViewerOpen: false,
+      isViewerOpen: false,      
       isShareModalOpen: false,
       shareLink: '',
       shareExpiryDate: '',
+      shouldRefreshPhotos: false, // Flag to indicate if photos should be refreshed (when coming from PhotoEditor)
       sharePermissions: {
         view: true,
         edit: false,
-        download: false      },      sharedLinks: [],
+        download: false
+      },
+      sharedLinks: [],
       errorMessage: '',
       successMessage: '',
       isLoading: false,
-        // Group creation
+      // Group creation
       showCreateGroupModal: false,
       newGroupName: '',
       newGroupDescription: '',
       isCreatingGroup: false,
       groupCreationError: '',
       groupCreationSuccess: '',
-      
       // Loading states
       isLoadingPhotos: false,
-      authChecked: false
+      authChecked: false,
+      
+      // Image error tracking
+      imageErrors: []
     };
-  },  computed: {
+  },  
+  computed: {
     filteredPhotos() {
       if (!this.searchQuery) return this.photos;
       return this.photos.filter(photo => {
@@ -327,7 +344,8 @@ export default {
         return photoName.toLowerCase().includes(this.searchQuery.toLowerCase());
       });
     },
-  },methods: {
+  },
+  methods: {
     async handleLogout() {
       try {
         // Import auth service
@@ -429,6 +447,7 @@ export default {
     openViewer(photo) {
       this.selectedPhoto = photo;
       this.isViewerOpen = true;
+<<<<<<< HEAD
     },    async downloadPhoto(photo) {
       if (!photo) {
         console.warn('No photo data available for download');
@@ -496,14 +515,166 @@ export default {
       
       return name;
     },goToEditor(photo) {
+=======
+    },    
+      async downloadPhoto(photo) {
+      try {
+        console.log('Downloading photo:', photo);
+        
+        // Extract photoId using multiple fallbacks
+        const photoId = photo.photoId || 
+                       photo.PhotoID || 
+                       photo.id || 
+                       photo.S3Key || 
+                       photo.s3Key;
+                       
+        if (!photoId) {
+          console.error('No photoId found in photo object:', photo);
+          alert('Cannot download photo: No photo ID found');
+          return;
+        }
+        
+        // Get file name with fallbacks for display in toast/console
+        const displayName = photo.name || photo.photoName || photo.PhotoName || 'photo';
+        
+        // Import auth service
+        const authService = await import('../services/auth.js').then(module => module.default);
+        
+        // Ensure token is valid
+        await authService.ensureValidToken();
+        const token = authService.getIdToken();
+        if (!token) {
+          console.error("Token is null. User may not be logged in.");
+          alert('Please log in to download photos');
+          return;
+        }
+          // Get file name to use for download
+        let fileName = displayName;
+        if (!fileName.includes('.')) {
+          // Try to extract extension from URL or default to jpg
+          const ext = photo.url ? photo.url.split('?')[0].split('.').pop() || 'jpg' : 'jpg';
+          fileName += '.' + ext;
+        }
+        
+        // Call the special download API endpoint
+        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            photoId: photoId,
+            filename: fileName  // Include filename for content-disposition header
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to get download URL: ${response.status}`);
+        }
+          const result = await response.json();
+        console.log('Download URL response:', result);
+        
+        // Check for different possible response structures
+        const downloadUrl = result.downloadUrl || 
+                           (result.url ? result.url : null) || 
+                           (result.urls && result.urls.length > 0 ? result.urls[0].signedUrl : null) || 
+                           (result.signedUrl ? result.signedUrl : null);
+        
+        if (downloadUrl) {
+          console.log('Opening download URL:', downloadUrl);
+          
+          // Open the download URL which should trigger automatic download
+          // due to Content-Disposition header set on the server
+          window.open(downloadUrl, '_blank');
+          
+          console.log('Download initiated for:', displayName);
+        } else {
+          // Fall back to basic method if we have a URL
+          if (photo.url) {
+            console.log('No special download URL found, using photo URL directly');
+            window.open(photo.url, '_blank');
+          } else {
+            throw new Error('No download URL returned from the server');
+          }
+        }      } catch (error) {
+        console.error('Download error:', error);
+        
+        // Don't show an alert - just silently fall back to regular URL method
+        // This provides a better user experience
+        
+        // Fall back to basic method if we have a URL
+        if (photo.url) {
+          console.log('Falling back to direct URL download due to error:', error.message);
+          
+          try {
+            // Create a more reliable download method as fallback
+            fetch(photo.url)
+              .then(response => response.blob())
+              .then(blob => {
+                // Create a blob URL (in your own domain)
+                const blobUrl = URL.createObjectURL(blob);
+                
+                // Get file name with proper extension
+                let fileName = displayName;
+                if (!fileName.includes('.')) {
+                  const ext = photo.url.split('?')[0].split('.').pop() || 'jpg';
+                  fileName += '.' + ext;
+                }
+                
+                // Create link with blob URL
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                
+                // Clean up
+                setTimeout(() => {
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(blobUrl);
+                }, 100);
+                
+                console.log('Fallback download complete for:', fileName);
+              })
+              .catch(fallbackError => {
+                console.error('Fallback download failed:', fallbackError);
+                // Last resort: direct window.open
+                window.open(photo.url, '_blank');
+              });
+          } catch (fallbackError) {
+            console.error('Error in fallback download:', fallbackError);
+            window.open(photo.url, '_blank');
+          }
+        } else {
+          // Only show alert if we have no fallback URL
+          alert(`Failed to download photo: No download URL available`);
+        }
+      }
+    },
+    
+    goToEditor(photo) {
+      // Extract photoId from photo object, trying all possible property names
+      const photoId = photo.photoId || photo.id || photo.S3Key || photo.s3Key || null;
+      
+      if (!photoId) {
+        console.error('No photoId found in photo object:', photo);
+        alert('Cannot edit photo: No photo ID found. Please refresh the page and try again.');
+        return;
+      }
+      
+>>>>>>> 8affacf81534b8cd6b064ee6f763d98e097ef370
       this.$router.push({ 
         name: 'Editor', 
         query: { 
-          photo: photo.originalUrl || photo.url,
-          name: photo.PhotoName || photo.photoName || photo.name || 'photo'
+          photoId: photoId, // Use photo ID for reliable presigned URL fetching
+          name: photo.name,
+          // We no longer need to pass the direct photo URL as we're using photoId
         } 
       });
-    },openShareModal(photo) {
+    },
+    
+    openShareModal(photo) {
       this.selectedPhoto = photo;
       this.isShareModalOpen = true;
       this.shareLink = '';
@@ -512,10 +683,13 @@ export default {
       // Load existing shared links for this photo
       this.loadSharedLinks(photo);
     },
+    
     closeShareModal() {
       this.isShareModalOpen = false;
       this.shareLink = '';
-    },    async generateShareLink() {
+    },    
+    
+    async generateShareLink() {
       try {
         // Show loading state
         this.isLoading = true;
@@ -592,11 +766,14 @@ export default {
         this.isLoading = false;
       }
     },
+    
     copyShareLink() {
       this.$refs.shareLinkInput.select();
       document.execCommand('copy');
       this.$toast.success('Link copied to clipboard!');
-    },    async revokeShareLink(index) {
+    },    
+    
+    async revokeShareLink(index) {
       try {
         const share = this.sharedLinks[index];
         
@@ -643,7 +820,8 @@ export default {
           setTimeout(() => {
             this.errorMessage = '';
           }, 5000);
-        }      } catch (error) {
+        }      
+      } catch (error) {
         console.error('❌ Error deleting share link:', error);
         this.errorMessage = 'An error occurred while deleting the share link';
         setTimeout(() => {
@@ -721,7 +899,8 @@ export default {
         }, 3000);
       }
     },
-      async loadSharedLinks(photo) {
+    
+    async loadSharedLinks(photo) {
       try {
         this.sharedLinks = [];
         
@@ -761,7 +940,8 @@ export default {
               permissions = { view: true, edit: true, download: false };
             } else if (share.permission === 'download') {
               permissions = { view: true, edit: false, download: true };
-            }            return {
+            }            
+            return {
               url: share.shareUrl || `${window.location.origin}/shared/${share.shareId}`,
               expiry: share.expiresAt || share.expiryDate,
               permissions: permissions,
@@ -774,19 +954,41 @@ export default {
         // Don't show an error message to the user here since this is a background operation
       }
     },
+    
     generateToken() {
       // In a real app, this would be generated by your backend
       return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     },
+    
     getDefaultExpiryDate() {
       const date = new Date();
       date.setDate(date.getDate() + 7); // Default to 7 days from now
       return date.toISOString().slice(0, 16);
-    },    formatExpiryDate(dateString) {
+    },    
+    
+    formatExpiryDate(dateString) {
       if (!dateString) return 'Never';
       const date = new Date(dateString);
       return date.toLocaleString();
     },
+    
+    /**
+     * Handle image loading errors and replace with placeholder
+     */
+    handleImageError(event, photo) {
+      console.warn(`Failed to load image for photo: ${photo.name}`);
+      // Replace with a placeholder image or apply a class to show a fallback
+      event.target.style.display = 'none';
+      // Add to error log for troubleshooting
+      if (!this.imageErrors) this.imageErrors = [];
+      this.imageErrors.push({
+        photoId: photo.photoId || photo.id,
+        name: photo.name,
+        url: photo.url,
+        time: new Date().toISOString()
+      });
+    },
+    
     async deletePhoto(photo) {
       console.log("[Delete Photo] Incoming photo object:", photo);
 
@@ -806,8 +1008,7 @@ export default {
       }
 
       try {
-        const authService = await import('../services/auth.js').then(module => module.default);
-        const token = authService.getIdToken();
+        const token = localStorage.getItem('cognito_id_token');
         if (!token) {
           alert("You must be logged in to delete photos.");
           console.error("No auth token found.");
@@ -841,13 +1042,12 @@ export default {
         // Remove deleted photo from local UI state
         this.photos = this.photos.filter(p => p.photoId !== photo.photoId);
         this.isViewerOpen = false;
-
       } catch (error) {
         console.error("Error deleting photo:", error);
         alert("An error occurred while deleting the photo.");
       }
     },
-
+    
     /**
      * Show the create group modal
      */
@@ -922,7 +1122,7 @@ export default {
         this.createNewGroup();
       }
     },
-
+    
     async fetchUserPhotos() {
       try {
         this.isLoadingPhotos = true;
@@ -941,7 +1141,9 @@ export default {
         if (!user || !user.id) {
           console.error("Missing user ID");
           return;
-        }        // Fetch photo metadata from backend
+        }
+
+        // Fetch photo metadata from backend
         const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/profile/images', {
           method: 'GET',
           headers: {
@@ -967,7 +1169,9 @@ export default {
         if (!photoIds.length) {
           this.photos = [];
           return;
-        }        const presignRes = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+        }
+        
+        const presignRes = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -984,20 +1188,102 @@ export default {
         const urlMap = {};
         (presignResult.urls || []).forEach(({ photoId, signedUrl }) => {
           urlMap[photoId] = signedUrl;
+        });        // Map presigned URLs to photos, always set photoId
+        this.photos = photoMetas.map(meta => {
+          // Generate unique id for each photo
+          const photoId = meta.photoId || meta.id || meta.s3Key || meta.key;
+          // Get URL from mapping or use empty string
+          const url = urlMap[photoId] || '';
+          // Ensure name is present
+          const name = meta.name || meta.photoName || meta.PhotoName || meta.s3Key || meta.key || meta.id || 'Unnamed';
+          
+          return {
+            ...meta,
+            photoId,
+            url,
+            name,
+            // Flag to track if image is loaded
+            loaded: false
+          };
         });
-        // Map presigned URLs to photos, always set photoId
+        
+        console.log("Photos with presigned URLs:", this.photos);
+      } catch (error) {
+        console.error("Error fetching photos:", error);      
+      } finally {
+        this.isLoadingPhotos = false;
+      }
+    },
+    
+    async searchPhotos() {
+      try {
+        const authService = await import('../services/auth.js').then(module => module.default);
+        await authService.ensureValidToken();
+        const token = authService.getIdToken();
+        if (!token) {
+          console.error("Token is null. User may not be logged in.");
+          return;
+        }
+        const user = await authService.getCurrentUser();
+        if (!user || !user.id) {
+          console.error("Missing user ID");
+          return;
+        }
+        // Call AWS backend search endpoint
+        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            query: this.searchQuery
+          }),
+        });
+        if (!response.ok) {
+          throw new Error(`Search failed: ${response.status}`);
+        }
+        const result = await response.json();
+        const photoMetas = result.images || [];
+        if (!photoMetas.length) {
+          this.photos = [];
+          return;
+        }
+        // Get presigned URLs for search results
+        const photoIds = photoMetas.map(p => p.photoId || p.s3Key || p.key || p.id).filter(Boolean);
+        if (!photoIds.length) {
+          this.photos = [];
+          return;
+        }
+        const presignRes = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ photoIds }),
+        });
+        if (!presignRes.ok) {
+          throw new Error(`Failed to get presigned URLs: ${presignRes.status}`);
+        }
+        const presignResult = await presignRes.json();
+        const urlMap = {};
+        (presignResult.urls || []).forEach(({ photoId, signedUrl }) => {
+          urlMap[photoId] = signedUrl;
+        });
         this.photos = photoMetas.map(meta => ({
           ...meta,
           photoId: meta.photoId || meta.id || meta.s3Key || meta.key,
           url: urlMap[meta.photoId || meta.id || meta.s3Key || meta.key] || '',
         }));
-        console.log("Photos with presigned URLs:", this.photos);
       } catch (error) {
-        console.error("Error fetching photos:", error);
+        console.error("Error searching photos:", error);
       } finally {
         this.isLoadingPhotos = false;
       }
     },
+<<<<<<< HEAD
     searchPhotos() {
       // This method is called when the search button is clicked
       // The filtering is already handled by the computed property filteredPhotos
@@ -1032,6 +1318,11 @@ export default {
       return photo.photoId || photo.PhotoID || photo.id || photo.PhotoId;
     },
   },async mounted() {
+=======
+  },
+  
+  async mounted() {
+>>>>>>> 8affacf81534b8cd6b064ee6f763d98e097ef370
     // Check authentication
     try {
       console.log('🔄 Dashboard mounted, checking authentication...');
@@ -1068,6 +1359,29 @@ export default {
         console.log('🔄 Fetching photos...');
         await this.fetchUserPhotos();
         
+        // If we're coming from the photo editor with a refresh flag, just ensure we've refreshed photos
+        if (this.shouldRefreshPhotos) {
+          console.log('📸 Photos refreshed after edit');
+          
+          // We still sort to find the newest photo for debug purposes
+          if (this.photos.length > 0) {
+            const sortedPhotos = [...this.photos].sort((a, b) => {
+              const timeA = a.createdAt || a.lastModified || a.timestamp || 0;
+              const timeB = b.createdAt || b.lastModified || b.timestamp || 0;
+              return new Date(timeB) - new Date(timeA);
+            });
+            
+            // Log the newest photo but don't automatically open it
+            const newestPhoto = sortedPhotos[0];
+            if (newestPhoto) {
+              console.log('🔍 Most recent photo:', newestPhoto.name);
+            }
+          }
+          
+          // Reset the flag
+          this.shouldRefreshPhotos = false;
+        }
+        
       } catch (userError) {
         console.error('❌ Token validation failed:', userError);
         localStorage.clear();
@@ -1080,7 +1394,16 @@ export default {
       localStorage.clear();
       this.$router.replace('/login');
     }
-  },created() {
+  },
+  
+  created() {
+    // Check if we're coming back from photo editor and need to refresh photos
+    if (this.$route.query.refreshPhotos === 'true') {
+      console.log('Photo editor requested photo refresh - will fetch latest photos');
+      this.shouldRefreshPhotos = true;
+    }
+    
+    // Legacy support for direct edited photo URL passing (can be removed in future)
     if (this.$route.query.editedPhoto) {
       const photoName = this.$route.query.originalName;
       const existingIndex = this.photos.findIndex(p => p.name === photoName);
@@ -1104,6 +1427,27 @@ export default {
 
 <style scoped>
 .btn {
-  @apply bg-white text-gray-700 px-4 py-2 rounded shadow hover:bg-gray-100;
+  background-color: white;
+  color: #4a5568;
+  padding: 1rem 0.5rem;
+  border-radius: 0.25rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+.btn:hover {
+  background-color: #f7fafc;
+}
+
+.photo-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.photo-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 </style>
