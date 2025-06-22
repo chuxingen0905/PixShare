@@ -4,7 +4,7 @@
     <div class="w-64 bg-white p-4 rounded-lg shadow mr-6">
       <header class="flex justify-between items-center mb-4">
         <h1 class="text-xl font-bold">Photo Editor</h1>
-        <router-link to="/dashboard" class="text-blue-600 hover:underline">← Back</router-link>
+        <button @click="goBack" class="text-blue-600 hover:underline">← Back</button>
       </header>
 
       <!-- Tools Section -->
@@ -673,7 +673,25 @@ export default {  data() {  return {
       get() { return this.adjustmentValues.saturation; },
       set(val) { this.adjustmentValues.saturation = val; }
     }
-  },  methods: {    showErrorMessage(message) {
+  },  methods: {
+    goBack() {
+      const groupId = this.$route.query.groupId;
+      if (groupId) {
+        // If editing a group photo, go back to group photos
+        this.$router.push({
+          path: `/groups/${groupId}/photos`,
+          query: {
+            groupName: this.$route.query.groupName,
+            groupDescription: this.$route.query.groupDescription
+          }
+        });
+      } else {
+        // Otherwise, go back to dashboard
+        this.$router.push('/dashboard');
+      }
+    },
+    
+    showErrorMessage(message) {
       this.errorMessage = message;
       // Using errorMessage instead of alert for better UX
       this.loadError = true;
@@ -701,15 +719,30 @@ export default {  data() {  return {
         if (!token) {
           console.error('No authentication token available');
           throw new Error('You must be logged in to view photos');
-        }
+        }        // Check if this is a group photo edit
+        const groupId = this.$route.query.groupId;
+        const isGroupPhoto = groupId != null;
         
-        const res = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+        // Create request body for presigned URL
+        const requestBody = {
+          photoIds: [{
+            photoId,
+            expirySeconds: 3600
+          }]
+        };
+        
+        // Use different endpoints for group vs individual photos
+        const endpoint = isGroupPhoto 
+          ? 'https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/groups/batch-presign'
+          : 'https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display';
+        
+        const res = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ photoIds: [photoId] }),
+          body: JSON.stringify(requestBody),
         });
         
         if (!res.ok) {
@@ -1532,18 +1565,40 @@ export default {  data() {  return {
         // Create a File object from the blob
         const mimeType = `image/${this.outputFormat}`;
         const file = new File([blob], filename, { type: mimeType });
+          // Check if this is a group photo edit
+        const groupId = this.$route.query.groupId;
+        const isGroupPhoto = groupId != null;
         
-        // Upload the file as a new photo
-        await this.uploadEditedPhoto(file);
-        
-        // Navigate to dashboard with a flag to refresh the photos
-        this.$router.push({
-          path: '/dashboard',
-          query: { 
-            refreshPhotos: 'true',
-            timestamp: Date.now() // Add timestamp to prevent caching
-          }
-        });
+        if (isGroupPhoto) {
+          // For group photos, we need to use the override API
+          // Get the base64 data for the override
+          const base64Data = this.editedPhotoDataUrl.split(',')[1];
+          
+          // Navigate back to group photos with the edited data
+          this.$router.push({
+            path: `/groups/${groupId}/photos`,
+            query: { 
+              editedPhoto: 'true',
+              editedPhotoData: base64Data,
+              newFileName: filename,
+              originalPhotoId: this.photoId,
+              groupName: this.$route.query.groupName,
+              groupDescription: this.$route.query.groupDescription
+            }
+          });
+        } else {
+          // For regular photos, upload as a new photo
+          await this.uploadEditedPhoto(file);
+          
+          // Navigate to dashboard with a flag to refresh the photos
+          this.$router.push({
+            path: '/dashboard',
+            query: { 
+              refreshPhotos: 'true',
+              timestamp: Date.now() // Add timestamp to prevent caching
+            }
+          });
+        }
       } catch (error) {
         console.error('Error uploading edited photo:', error);
         this.errorMessage = error.message || 'Failed to upload the edited photo. Please try again.';

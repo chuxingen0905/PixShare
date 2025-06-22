@@ -5,6 +5,7 @@ import Dashboard from '../views/Dashboard.vue'
 import ForgotPassword from '../views/ForgotPassword.vue'
 import Editor from '../views/PhotoEditor.vue'
 import GroupManagementPage from '../views/GroupManagementPage.vue'
+import GroupPhotos from '../views/GroupPhotos.vue'
 import SharedPhoto from '../views/SharedPhoto.vue'
 import PresignedViewer from '../views/PresignedViewer.vue'
 
@@ -19,7 +20,14 @@ const routes = [
         path: '/groups', 
         name: 'GroupManagement', 
         component: GroupManagementPage 
-    },    {
+    },
+    {
+        path: '/groups/:groupId/photos',
+        name: 'GroupPhotos',
+        component: GroupPhotos,
+        meta: { requiresAuth: true }
+    },
+    {
         path: '/shared/:shareId',
         name: 'SharedPhoto',
         component: SharedPhoto

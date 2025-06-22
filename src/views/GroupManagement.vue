@@ -39,14 +39,22 @@
     </div>    <!-- Group List -->
     <div class="mb-8" v-if="groups.length > 0">
       <h2 class="text-xl font-semibold mb-4">Your Group Folders</h2>
-      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <div
+      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">        <div
           v-for="group in groups"
           :key="group.id"
-          class="bg-white p-4 rounded-lg shadow hover:shadow-md transition"
+          @click="navigateToGroupPhotos(group)"
+          class="bg-white p-4 rounded-lg shadow hover:shadow-md transition cursor-pointer group"
         >
           <div class="flex justify-between items-start">
-            <h3 class="font-medium text-lg">{{ group.name }}</h3>
+            <div class="flex-1">
+              <h3 class="font-medium text-lg group-hover:text-blue-600 transition">{{ group.name }}</h3>
+              <p class="text-sm text-gray-500 mt-1">
+                {{ group.memberCount || group.members?.length || '1' }} member(s)
+              </p>
+              <p class="text-xs text-blue-500 mt-2 opacity-0 group-hover:opacity-100 transition">
+                Click to view group photos →
+              </p>
+            </div>
             <div class="flex gap-2">
               <button
                 @click.stop="openEditGroup(group)"
@@ -67,9 +75,7 @@
                 </svg>
               </button>
             </div>
-          </div>          <p class="text-sm text-gray-500 mt-1">
-            {{ group.memberCount || group.members?.length || '1' }} member(s)
-          </p>
+          </div>
         </div>
       </div>
     </div>
@@ -201,7 +207,21 @@ export default {
       createGroupError: '',
       createGroupSuccess: ''
     }
-  },methods: {
+  },
+  
+  methods: {
+    navigateToGroupPhotos(group) {
+      console.log('📁 Navigating to group photos:', group);
+      this.$router.push({
+        name: 'GroupPhotos',
+        params: { groupId: group.id || group.groupId },
+        query: { 
+          groupName: group.name,
+          groupDescription: group.description || ''
+        }
+      });
+    },
+    
     async createGroup() {
       if (!this.newGroupName.trim()) {
         this.createGroupError = 'Group name is required';

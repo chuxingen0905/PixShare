@@ -127,10 +127,11 @@ const shareService = {
    * @param {string} expiryDate - ISO date string for expiry
    * @returns {Promise} Promise that resolves with the share info
    */
-  createShareLink: function(photoId, permissions, expiryDate) {
+  createShareLink: function(photoId, permissions, expiryDate, isGroupPhoto = false) {
     return new Promise(async (resolve) => {
       try {
         console.log('Creating share link for photo:', photoId);
+        console.log('Is group photo:', isGroupPhoto);
         
         // Convert expiry date to seconds from now
         let expirySeconds = 604800; // Default to 1 week (7 days)
@@ -153,10 +154,11 @@ const shareService = {
           return;
         }
 
-        // Request payload - only photoId and expirySeconds as Lambda expects
+        // Request payload - include Group parameter for share links
         const payload = {
           photoId: String(photoId).trim(),
-          expirySeconds: Number(expirySeconds)
+          expirySeconds: Number(expirySeconds),
+          Group: isGroupPhoto // Include Group parameter for share link generation
         };
         
         // Additional validation
