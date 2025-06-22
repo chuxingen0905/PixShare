@@ -1,10 +1,10 @@
 <template>
-  <div class="flex min-h-screen bg-blue-50">
+  <div class="flex min-h-screen h-screen bg-blue-50 overflow-hidden">
     <!-- Sidebar -->
     <Sidebar />
 
     <!-- Main Content -->
-    <div class="flex-1 px-6 py-4">
+    <div class="flex-1 px-6 py-4 overflow-y-auto">
       
       <!-- Header -->
     <div class="flex justify-between items-center mb-6">
