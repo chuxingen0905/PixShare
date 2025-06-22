@@ -13,10 +13,10 @@
     <div v-else-if="photo" class="max-w-4xl w-full bg-white rounded-lg shadow-lg overflow-hidden">
       <!-- Photo Header -->
       <div class="bg-blue-600 text-white p-4 flex justify-between items-center">
-        <h1 class="text-xl font-semibold">Shared Photo</h1>
+        <h1 class="text-xl font-semibold">{{ photo.photoName }}</h1>
         <div class="text-sm">
-          <span v-if="expiryDate">
-            Expires: {{ new Date(expiryDate).toLocaleString() }}
+          <span v-if="photo.expiresAt">
+            Expires: {{ new Date(photo.expiresAt).toLocaleString() }}
           </span>
         </div>
       </div>
@@ -24,27 +24,30 @@
       <!-- Photo Display -->
       <div class="p-4">
         <img 
-          :src="photo.url" 
-          :alt="photo.name" 
+          :src="photo.photoUrl" 
+          :alt="photo.photoName" 
           class="max-w-full max-h-[70vh] mx-auto rounded shadow"
+          @error="onImageError"
         />
         <div class="mt-4 text-center">
-          <h2 class="text-xl text-gray-800">{{ photo.name }}</h2>
-          <p class="text-sm text-gray-500">Shared by: {{ photo.sharedBy || 'Unknown' }}</p>
+          <h2 class="text-xl text-gray-800">{{ photo.photoName }}</h2>
+          <p class="text-sm text-gray-500" v-if="photo.createdAt">
+            Shared on: {{ new Date(photo.createdAt).toLocaleString() }}
+          </p>
         </div>
       </div>
       
       <!-- Actions -->
       <div class="p-4 border-t border-gray-200 flex justify-center space-x-4">
         <button 
-          v-if="permissions.includes('download')"
+          v-if="permissions.download"
           @click="downloadPhoto"
           class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
         >
           Download
         </button>
         <button
-          v-if="permissions.includes('edit')"
+          v-if="permissions.edit"
           @click="editPhoto"
           class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition"
         >
@@ -64,7 +67,7 @@
 </template>
 
 <script>
-import axios from 'axios';
+import shareService from '../services/shareService.js'
 
 export default {
   name: 'SharedPhoto',
@@ -73,98 +76,71 @@ export default {
       loading: true,
       error: null,
       photo: null,
-      permissions: [],
-      expiryDate: null,
+      permissions: {
+        view: true,
+        download: false,
+        edit: false
+      },
       shareId: null
     };
   },
   mounted() {
     this.loadSharedPhoto();
-  },  methods: {
+  },
+  methods: {
     async loadSharedPhoto() {
       this.loading = true;
+      this.error = null;
+      
       try {
-        // Get photoId and shareId from the route
-        const photoId = this.$route.params.id;
-        const shareId = this.$route.query.id;
-        this.shareId = shareId;
+        // Get shareId from the route parameter
+        this.shareId = this.$route.params.shareId;
         
-        console.log('Loading shared photo:', photoId, 'with share ID:', shareId);
+        console.log('🔄 Loading shared photo for shareId:', this.shareId);
         
-        if (!photoId || !shareId) {
-          throw new Error('Invalid share link');
+        if (!this.shareId) {
+          throw new Error('Invalid share link - no share ID found');
         }
         
-        // Simple mock data instead of API call
-        const response = null;
+        // Call the shareService to get the shared photo
+        const result = await shareService.getSharedPhoto(this.shareId);
         
-        // For testing, use mock data if API call fails
-        if (!response) {
-          this.photo = {
-            name: photoId,
-            url: `/assets/${photoId}`,
-            sharedBy: 'User'
-          };
-          this.permissions = ['view']; // Default permission
-          this.expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-        } else {
-          this.photo = {
-            name: response.name || photoId,
-            url: response.url || `/assets/${photoId}`,
-            sharedBy: response.sharedBy || 'User'
-          };
-          this.permissions = response.permission ? [response.permission] : ['view'];
-          this.expiryDate = response.expiryDate;
+        console.log('📥 Share service result:', result);
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to load shared photo');
         }
+        
+        // Set the photo data
+        this.photo = result.photo;
+        this.permissions = result.permissions;
+        
+        console.log('✅ Photo loaded successfully:', this.photo);
+        
       } catch (err) {
-        console.error('Error loading shared photo:', err);
+        console.error('❌ Error loading shared photo:', err);
         this.error = err.message || 'Failed to load the shared photo';
       } finally {
         this.loading = false;
       }
     },
-      async getSharedPhotoDetails(photoId, shareId) {
-      try {
-        // Import the real share service
-        const shareServiceModule = await import('../services/shareService.js');
-        const shareService = shareServiceModule.default;
-        
-        // API Gateway URL
-        const API_ENDPOINT = 'https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment';
-        
-        // First try using the shareService
-        try {
-          console.log('Attempting to get share details using shareService...');
-          const response = await shareService.getPhotoShares(photoId);
-          
-          // Find the specific share by ID
-          const shareDetails = response.find(share => share.shareId === shareId);
-          if (shareDetails) {
-            console.log('Share found:', shareDetails);
-            return shareDetails;
-          }
-        } catch (e) {
-          console.warn('Error using shareService:', e);
-        }
-        
-        // Fallback to direct API call if shareService didn't work
-        console.log('Falling back to direct API call...');
-        const response = await axios.get(`${API_ENDPOINT}/photos/sharing/${shareId}`);
-        console.log('API response:', response.data);
-        return response.data;
-      } catch (err) {
-        console.error('API Error:', err);
-        // Return null to trigger mock data use
-        return null;
-      }
+    
+    onImageError() {
+      console.error('❌ Failed to load image');
+      this.error = 'Failed to load the image. The link may have expired.';
     },
     
     downloadPhoto() {
-      if (!this.photo || !this.photo.url) return;
+      if (!this.photo || !this.photo.photoUrl) {
+        console.warn('No photo URL available for download');
+        return;
+      }
       
+      // Create a temporary link to download the photo
       const link = document.createElement('a');
-      link.href = this.photo.url;
-      link.download = this.photo.name || 'shared-photo.jpg';
+      link.href = this.photo.photoUrl;
+      link.download = this.photo.photoName || 'shared-photo.jpg';
+      link.target = '_blank'; // Open in new tab to handle CORS if needed
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -175,8 +151,8 @@ export default {
       this.$router.push({
         name: 'Editor',
         query: {
-          photo: this.photo.url,
-          name: this.photo.name,
+          photo: this.photo.photoUrl,
+          name: this.photo.photoName,
           shared: 'true',
           shareId: this.shareId
         }

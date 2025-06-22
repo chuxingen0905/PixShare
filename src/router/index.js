@@ -20,7 +20,7 @@ const routes = [
         name: 'GroupManagement', 
         component: GroupManagementPage 
     },    {
-        path: '/share/:id',
+        path: '/shared/:shareId',
         name: 'SharedPhoto',
         component: SharedPhoto
     },

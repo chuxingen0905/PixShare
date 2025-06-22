@@ -310,10 +310,20 @@ const shareService = {
         const shareId = parsedResponse.shareStr;
         const shareUrl = parsedResponse.url;
         
+        // Construct proper shareable URL
+        const properShareLink = `${window.location.origin}/shared/${shareId}`;
+        
+        console.log('🔗 Share link constructed:', {
+          shareId,
+          shareUrl,
+          properShareLink,
+          origin: window.location.origin
+        });
+        
         resolve({
           success: true,
           shareId: shareId || "unknown",
-          shareLink: shareUrl || `${window.location.origin}/share/${photoId}?id=${shareId || "unknown"}`,
+          shareLink: properShareLink,
           photoId: parsedResponse.photoId,
           expiresIn: parsedResponse.expiresIn
         });
@@ -485,8 +495,8 @@ const shareService = {
           
           const photoIdFromShare = share.PhotoID || share.photoId || photoId;
           
-          // Create the share URL that points to your viewer
-          const shareUrl = `${window.location.origin}/view?linkId=${shareId}`;
+          // Create the share URL that points to your shared photo viewer
+          const shareUrl = `${window.location.origin}/shared/${shareId}`;
           
           console.log('🔗 Creating share URL:', shareUrl);
           console.log('🆔 Share ID extracted:', shareId);
@@ -885,7 +895,152 @@ const shareService = {
       
       console.log('🔄 ======= END DELETE SHARE LINK =======');
     });
-  }
+  },
+  
+  /**
+   * Gets shared photo details using share ID (for public viewing)
+   * @param {string} shareId - The share ID from the URL
+   * @returns {Promise} Promise that resolves with photo details and permissions
+   */
+  getSharedPhoto: function(shareId) {
+    return new Promise(async (resolve) => {
+      try {
+        console.log('🔄 ======= GET SHARED PHOTO =======');
+        console.log('📋 Share ID:', shareId);
+        
+        if (!shareId) {
+          console.error('❌ No shareId provided');
+          resolve({
+            success: false,
+            error: 'Share ID is required'
+          });
+          return;
+        }
+        
+        // This endpoint should retrieve photo details using the share ID
+        // It should NOT require authentication since it's for public sharing
+        const url = `${API_ENDPOINT}/photos/sharing?linkId=${shareId}`;
+        console.log('🌐 Making request to:', url);
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+            // Note: No Authorization header needed for public shares
+          }
+        });
+        
+        console.log('📥 Response received:');
+        console.log('  - Status:', response.status);
+        console.log('  - Status Text:', response.statusText);
+        
+        if (response.status === 404) {
+          resolve({
+            success: false,
+            error: 'Share link not found or has expired'
+          });
+          return;
+        }
+        
+        if (response.status === 410) {
+          resolve({
+            success: false,
+            error: 'Share link has expired'
+          });
+          return;
+        }
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('❌ HTTP Error:', response.status, errorText);
+          resolve({
+            success: false,
+            error: `Failed to load shared photo: ${response.status}`
+          });
+          return;
+        }
+        
+        const responseText = await response.text();
+        console.log('  - Raw response:', responseText);
+        
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+        } catch (e) {
+          console.error('❌ Failed to parse JSON response:', e);
+          resolve({
+            success: false,
+            error: 'Invalid response from server'
+          });
+          return;
+        }
+        
+        // Parse the response body if it's a string (Lambda proxy integration)
+        let parsedResponse = responseData;
+        if (typeof responseData.body === 'string') {
+          try {
+            parsedResponse = JSON.parse(responseData.body);
+          } catch (e) {
+            console.error('❌ Failed to parse response body:', e);
+            resolve({
+              success: false,
+              error: 'Invalid response format'
+            });
+            return;
+          }
+        }
+        
+        console.log('✅ Parsed response:', parsedResponse);
+        
+        // Your Lambda returns: { "signedUrl": "https://..." }
+        // Let's log what we're extracting
+        console.log('🔍 Extracting photo data:');
+        console.log('  - signedUrl:', parsedResponse.signedUrl);
+        console.log('  - photoUrl fallback:', parsedResponse.photoUrl);
+        console.log('  - url fallback:', parsedResponse.url);
+        console.log('  - shareId:', shareId);
+        
+        const extractedPhotoUrl = parsedResponse.signedUrl || parsedResponse.photoUrl || parsedResponse.url;
+        console.log('  - Final photoUrl:', extractedPhotoUrl);
+        
+        if (!extractedPhotoUrl) {
+          console.error('❌ No valid photo URL found in response');
+          resolve({
+            success: false,
+            error: 'No photo URL found in response'
+          });
+          return;
+        }
+        
+        resolve({
+          success: true,
+          photo: {
+            shareId: parsedResponse.shareId || shareId,
+            photoId: parsedResponse.photoId || shareId,
+            photoUrl: extractedPhotoUrl,
+            photoName: parsedResponse.photoName || parsedResponse.name || shareId || 'Shared Photo',
+            createdAt: parsedResponse.createdAt,
+            expiresAt: parsedResponse.expiresAt || parsedResponse.expiryDate
+          },
+          permissions: {
+            view: true, // Always true for shared photos
+            download: parsedResponse.permissions?.includes('download') || false,
+            edit: parsedResponse.permissions?.includes('edit') || false
+          }
+        });
+        
+      } catch (error) {
+        console.error('❌ Error in getSharedPhoto:', error);
+        resolve({
+          success: false,
+          error: error.message || 'An unexpected error occurred'
+        });
+      }
+      
+      console.log('🔄 ======= END GET SHARED PHOTO =======');
+    });
+  },
+
 };
 
 // Export the service

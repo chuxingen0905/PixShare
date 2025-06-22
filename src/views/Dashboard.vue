@@ -186,11 +186,12 @@
           @click="openViewer(photo)"
           class="photo-card cursor-pointer bg-white rounded-lg shadow hover:shadow-lg transition flex flex-col overflow-hidden"
         >
-          <div class="aspect-square w-full relative flex items-center justify-center bg-gray-100 overflow-hidden">            <img
+          <div class="aspect-square w-full relative flex items-center justify-center bg-gray-100 overflow-hidden">
+            <img
               v-if="photo.url"
               :src="photo.url"
-              :alt="photo.name"
-              class="w-full h-full object-cover absolute inset-0"
+              :alt="photo.name || photo.PhotoName || photo.photoName || 'Photo'"
+              class="w-full h-full object-cover absolute inset-0 group-hover:scale-105 transition-transform duration-300"
               @load="photo.loaded = true"
               @error="handleImageError($event, photo)"
               loading="lazy"
@@ -206,8 +207,8 @@
               </svg>
             </div>
           </div>
-          <div class="p-2 text-center text-sm font-medium text-gray-700 truncate border-t border-gray-100" :title="photo.name">
-            {{ photo.name }}
+          <div class="p-2 text-center text-sm font-medium text-gray-700 truncate border-t border-gray-100" :title="photo.name || photo.PhotoName || photo.photoName || 'Photo'">
+            {{ photo.name || photo.PhotoName || photo.photoName || 'Photo' }}
           </div>
         </div>
       </div>
@@ -300,45 +301,51 @@ import shareService from '../services/shareService.js';
 import groupService from '../services/groupService.js';
 
 export default {
-  components: { Sidebar, PhotoViewer, GroupManagement },  data() {
+  components: { Sidebar, PhotoViewer, GroupManagement },  
+  data() {
     return {
       photos: [], // Empty array, will fetch from AWS
       searchQuery: '',
       selectedPhoto: null,
-      isViewerOpen: false,      isShareModalOpen: false,
+      isViewerOpen: false,      
+      isShareModalOpen: false,
       shareLink: '',
       shareExpiryDate: '',
       shouldRefreshPhotos: false, // Flag to indicate if photos should be refreshed (when coming from PhotoEditor)
       sharePermissions: {
         view: true,
         edit: false,
-        download: false      },sharedLinks: [],
+        download: false
+      },
+      sharedLinks: [],
       errorMessage: '',
       successMessage: '',
       isLoading: false,
-        // Group creation
+      // Group creation
       showCreateGroupModal: false,
       newGroupName: '',
       newGroupDescription: '',
       isCreatingGroup: false,
       groupCreationError: '',
       groupCreationSuccess: '',
-        // Loading states
+      // Loading states
       isLoadingPhotos: false,
       authChecked: false,
       
       // Image error tracking
       imageErrors: []
     };
-  },
+  },  
   computed: {
     filteredPhotos() {
       if (!this.searchQuery) return this.photos;
-      return this.photos.filter(photo =>
-        photo.name.toLowerCase().includes(this.searchQuery.toLowerCase())
-      );
+      return this.photos.filter(photo => {
+        const photoName = photo.PhotoName || photo.photoName || photo.name || '';
+        return photoName.toLowerCase().includes(this.searchQuery.toLowerCase());
+      });
     },
-  },  methods: {
+  },
+  methods: {
     async handleLogout() {
       try {
         // Import auth service
@@ -481,7 +488,9 @@ export default {
           });
       } catch (error) {
         console.error('Download error:', error);
-      }    },    
+      }    
+    },    
+    
     goToEditor(photo) {
       // Extract photoId from photo object, trying all possible property names
       const photoId = photo.photoId || photo.id || photo.S3Key || photo.s3Key || null;
@@ -500,7 +509,9 @@ export default {
           // We no longer need to pass the direct photo URL as we're using photoId
         } 
       });
-    },openShareModal(photo) {
+    },
+    
+    openShareModal(photo) {
       this.selectedPhoto = photo;
       this.isShareModalOpen = true;
       this.shareLink = '';
@@ -509,17 +520,33 @@ export default {
       // Load existing shared links for this photo
       this.loadSharedLinks(photo);
     },
+    
     closeShareModal() {
       this.isShareModalOpen = false;
       this.shareLink = '';
-    },    async generateShareLink() {
+    },    
+    
+    async generateShareLink() {
       try {
         // Show loading state
         this.isLoading = true;
         this.errorMessage = '';
         
-        const photoId = this.selectedPhoto.name;
-        console.log('Generating share link for photo:', photoId);
+        // Extract photoId using multiple fallbacks
+        const photoId = this.selectedPhoto.photoId || 
+                       this.selectedPhoto.PhotoID || 
+                       this.selectedPhoto.id || 
+                       this.selectedPhoto.PhotoName || 
+                       this.selectedPhoto.name;
+        
+        console.log('🔍 Selected photo object:', this.selectedPhoto);
+        console.log('📋 Generating share link for photo:', photoId);
+        
+        if (!photoId) {
+          console.error('❌ No valid photoId found in photo object');
+          this.errorMessage = 'Cannot generate share link: Photo ID not found';
+          return;
+        }
         
         // Construct the permissions object
         const permissions = {
@@ -545,9 +572,10 @@ export default {
             permissions: this.sharePermissions,
             shareId: result.shareId
           });
-          
-          // Mark the photo as shared
-          const photoIndex = this.photos.findIndex(p => p.name === this.selectedPhoto.name);
+            // Mark the photo as shared
+          const photoIndex = this.photos.findIndex(p => 
+            (p.photoId || p.PhotoID || p.id || p.PhotoName || p.name) === photoId
+          );
           if (photoIndex !== -1) {
             this.photos[photoIndex].shared = true;
           }
@@ -575,11 +603,14 @@ export default {
         this.isLoading = false;
       }
     },
+    
     copyShareLink() {
       this.$refs.shareLinkInput.select();
       document.execCommand('copy');
       this.$toast.success('Link copied to clipboard!');
-    },    async revokeShareLink(index) {
+    },    
+    
+    async revokeShareLink(index) {
       try {
         const share = this.sharedLinks[index];
         
@@ -605,14 +636,20 @@ export default {
           
           // Show success message
           alert('Share link deleted successfully');
-          
-          // If no more shared links, mark photo as not shared
+            // If no more shared links, mark photo as not shared
           if (this.sharedLinks.length === 0) {
-            const photoIndex = this.photos.findIndex(p => p.name === this.selectedPhoto.name);
+            const selectedPhotoId = this.selectedPhoto.photoId || 
+                                   this.selectedPhoto.PhotoID || 
+                                   this.selectedPhoto.id || 
+                                   this.selectedPhoto.PhotoName || 
+                                   this.selectedPhoto.name;
+            const photoIndex = this.photos.findIndex(p => 
+              (p.photoId || p.PhotoID || p.id || p.PhotoName || p.name) === selectedPhotoId
+            );
             if (photoIndex !== -1) {
               this.photos[photoIndex].shared = false;
             }
-          }        } else {
+          }} else {
           console.error('❌ Failed to delete share link:', result.error);
           
           // Show error message
@@ -620,7 +657,8 @@ export default {
           setTimeout(() => {
             this.errorMessage = '';
           }, 5000);
-        }      } catch (error) {
+        }      
+      } catch (error) {
         console.error('❌ Error deleting share link:', error);
         this.errorMessage = 'An error occurred while deleting the share link';
         setTimeout(() => {
@@ -703,13 +741,27 @@ export default {
       try {
         this.sharedLinks = [];
         
-        if (!photo || !photo.name) {
+        if (!photo) {
           console.warn('Invalid photo object provided to loadSharedLinks');
           return;
         }
         
+        // Extract photoId using multiple fallbacks
+        const photoId = photo.photoId || 
+                       photo.PhotoID || 
+                       photo.id || 
+                       photo.PhotoName || 
+                       photo.name;
+        
+        console.log('🔍 Loading shared links for photo:', photoId);
+        
+        if (!photoId) {
+          console.warn('No valid photoId found for loading shared links');
+          return;
+        }
+        
         // Call the AWS API to get shares for this photo
-        const shares = await shareService.getPhotoShares(photo.name);
+        const shares = await shareService.getPhotoShares(photoId);
         
         // Map the API response to our UI format
         if (shares && shares.length > 0) {
@@ -725,11 +777,10 @@ export default {
               permissions = { view: true, edit: true, download: false };
             } else if (share.permission === 'download') {
               permissions = { view: true, edit: false, download: true };
-            }
-            
+            }            
             return {
-              url: share.shareUrl || `${window.location.origin}/share/${photo.name}?id=${share.shareId}`,
-              expiry: share.expiryDate,
+              url: share.shareUrl || `${window.location.origin}/shared/${share.shareId}`,
+              expiry: share.expiresAt || share.expiryDate,
               permissions: permissions,
               shareId: share.shareId
             };
@@ -740,15 +791,19 @@ export default {
         // Don't show an error message to the user here since this is a background operation
       }
     },
+    
     generateToken() {
       // In a real app, this would be generated by your backend
       return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     },
+    
     getDefaultExpiryDate() {
       const date = new Date();
       date.setDate(date.getDate() + 7); // Default to 7 days from now
       return date.toISOString().slice(0, 16);
-    },    formatExpiryDate(dateString) {
+    },    
+    
+    formatExpiryDate(dateString) {
       if (!dateString) return 'Never';
       const date = new Date(dateString);
       return date.toLocaleString();
@@ -770,6 +825,7 @@ export default {
         time: new Date().toISOString()
       });
     },
+    
     async deletePhoto(photo) {
       console.log("[Delete Photo] Incoming photo object:", photo);
 
@@ -906,6 +962,7 @@ export default {
     
     async fetchUserPhotos() {
       try {
+        this.isLoadingPhotos = true;
         const authService = await import('../services/auth.js').then(module => module.default);
         
         // Ensure token is valid
@@ -924,7 +981,8 @@ export default {
         }
 
         // Fetch photo metadata from backend
-        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/profile/images', {          method: 'GET',
+        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/profile/images', {
+          method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -949,7 +1007,9 @@ export default {
           this.photos = [];
           return;
         }
-        const presignRes = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {          method: 'POST',
+        
+        const presignRes = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -986,10 +1046,12 @@ export default {
         
         console.log("Photos with presigned URLs:", this.photos);
       } catch (error) {
-        console.error("Error fetching photos:", error);      } finally {
+        console.error("Error fetching photos:", error);      
+      } finally {
         this.isLoadingPhotos = false;
       }
     },
+    
     async searchPhotos() {
       try {
         const authService = await import('../services/auth.js').then(module => module.default);
@@ -1054,9 +1116,12 @@ export default {
         }));
       } catch (error) {
         console.error("Error searching photos:", error);
+      } finally {
+        this.isLoadingPhotos = false;
       }
     },
   },
+  
   async mounted() {
     // Check authentication
     try {
@@ -1086,13 +1151,15 @@ export default {
           this.$router.replace('/login');
           return;
         }
-          console.log('✅ User authenticated successfully');
+        
+        console.log('✅ User authenticated successfully');
         this.authChecked = true;
         
         // If authenticated, fetch photos
         console.log('🔄 Fetching photos...');
         await this.fetchUserPhotos();
-          // If we're coming from the photo editor with a refresh flag, just ensure we've refreshed photos
+        
+        // If we're coming from the photo editor with a refresh flag, just ensure we've refreshed photos
         if (this.shouldRefreshPhotos) {
           console.log('📸 Photos refreshed after edit');
           
@@ -1126,7 +1193,9 @@ export default {
       console.error("❌ Authentication check failed:", error);
       localStorage.clear();
       this.$router.replace('/login');
-    }  },
+    }
+  },
+  
   created() {
     // Check if we're coming back from photo editor and need to refresh photos
     if (this.$route.query.refreshPhotos === 'true') {
