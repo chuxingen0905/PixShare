@@ -1041,6 +1041,195 @@ const shareService = {
     });
   },
 
+  /**
+   * Download a photo using the backend download API
+   * @param {string} photoId - The photo ID
+   * @returns {Promise} Promise that resolves when download completes
+   */
+  downloadPhotoViaBackend: async function(photoId) {
+    try {
+      console.log('🔄 ======= BACKEND DOWNLOAD =======');
+      console.log('📋 Photo ID:', photoId);
+      
+      // Try the specific download endpoint first
+      let downloadUrl = '/photos/download';
+      console.log('🌐 Trying download endpoint:', `${API_ENDPOINT}${downloadUrl}`);
+      
+      try {
+        const response = await api({
+          method: 'PATCH',
+          url: downloadUrl,
+          data: { photoId }
+        });
+        
+        console.log('✅ Download API Response:', response.data);
+        console.log('📊 Response Status:', response.status);
+        
+        if (response.data && response.data.signedUrl) {
+          console.log('🔗 Signed URL received:', response.data.signedUrl);
+          
+          // Use the presigned URL with download headers
+          const link = document.createElement('a');
+          link.href = response.data.signedUrl;
+          link.style.display = 'none';
+          
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          console.log('✅ Backend download initiated');
+          return { success: true };
+        } else {
+          throw new Error('No signed URL received from backend');
+        }
+        
+      } catch (primaryError) {
+        console.warn('⚠️ Primary download endpoint failed, trying display endpoint...');
+        console.warn('Primary error:', primaryError.response?.status, primaryError.response?.data);
+        
+        // Fallback to display endpoint
+        const response = await api({
+          method: 'PATCH',
+          url: '/photos/display',
+          data: { photoId }
+        });
+        
+        console.log('✅ Display API Response:', response.data);
+        
+        if (response.data && response.data.signedUrl) {
+          console.log('🔗 Signed URL received from display endpoint:', response.data.signedUrl);
+          
+          const link = document.createElement('a');
+          link.href = response.data.signedUrl;
+          link.style.display = 'none';
+          
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          console.log('✅ Backend download initiated via display endpoint');
+          return { success: true };
+        } else {
+          throw new Error('No signed URL received from display endpoint');
+        }
+      }
+      
+    } catch (error) {
+      console.error('❌ All backend download attempts failed:', error);
+      console.error('📋 Final error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        url: error.config?.url
+      });
+      
+      // Provide specific error messages based on status code
+      let errorMessage = 'Download failed';
+      if (error.response?.status === 403) {
+        errorMessage = 'Access denied - check authentication or permissions';
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Download endpoint not found - contact support';
+      } else if (error.response?.status === 405) {
+        errorMessage = 'Method not allowed - API configuration issue';
+      }
+      
+      return {
+        success: false,
+        error: error.response?.data?.error || errorMessage
+      };
+    } finally {
+      console.log('🔄 ======= END BACKEND DOWNLOAD =======');
+    }
+  },
+
+  /**
+   * Download a photo through the backend (to bypass CORS)
+   * @param {string} photoUrl - The S3 presigned URL
+   * @param {string} fileName - The desired filename
+   * @returns {Promise} Promise that resolves when download completes
+   */
+  downloadPhoto: async function(photoUrl, fileName = 'photo.jpg') {
+    try {
+      console.log('🔄 ======= DOWNLOAD PHOTO =======');
+      console.log('📋 Photo URL:', photoUrl);
+      console.log('📋 File Name:', fileName);
+      
+      // Option 1: Try direct download first (might work with newer browsers)
+      try {
+        const link = document.createElement('a');
+        link.href = photoUrl;
+        link.download = fileName;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        
+        // Add some attributes to force download
+        link.setAttribute('download', fileName);
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        console.log('✅ Direct download initiated');
+        return { success: true };
+        
+      } catch (directError) {
+        console.warn('⚠️ Direct download failed, trying backend proxy:', directError);
+        throw directError; // Fall through to backend method
+      }
+      
+    } catch (error) {
+      console.error('❌ Download failed:', error);
+      return {
+        success: false,
+        error: error.message || 'Download failed'
+      };
+    } finally {
+      console.log('🔄 ======= END DOWNLOAD PHOTO =======');
+    }
+  },
+
+  /**
+   * Alternative download method using backend proxy
+   * @param {string} shareId - The share ID for backend download
+   * @param {string} fileName - The desired filename  
+   * @returns {Promise} Promise that resolves when download completes
+   */
+  downloadSharedPhoto: async function(shareId, fileName = 'shared-photo.jpg') {
+    try {
+      console.log('🔄 ======= DOWNLOAD SHARED PHOTO =======');
+      console.log('📋 Share ID:', shareId);
+      console.log('📋 File Name:', fileName);
+      
+      // This would require a backend endpoint like GET /photos/sharing/download?linkId=shareId
+      const downloadUrl = `${API_ENDPOINT}/photos/sharing/download?linkId=${shareId}`;
+      console.log('🌐 Download URL:', downloadUrl);
+      
+      // Create a hidden link that points to the backend download endpoint
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = fileName;
+      link.target = '_blank';
+      link.style.display = 'none';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      console.log('✅ Backend download initiated');
+      return { success: true };
+      
+    } catch (error) {
+      console.error('❌ Backend download failed:', error);
+      return {
+        success: false,
+        error: error.message || 'Backend download failed'
+      };
+    } finally {
+      console.log('🔄 ======= END DOWNLOAD SHARED PHOTO =======');
+    }
+  },
+
 };
 
 // Export the service

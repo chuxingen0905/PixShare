@@ -128,22 +128,55 @@ export default {
     onImageError() {
       console.error('❌ Failed to load image');
       this.error = 'Failed to load the image. The link may have expired.';
-    },
-    
-    downloadPhoto() {
+    },    downloadPhoto() {
       if (!this.photo || !this.photo.photoUrl) {
         console.warn('No photo URL available for download');
         return;
       }
       
-      // Create a temporary link to download the photo
-      const link = document.createElement('a');
+      const filename = this.getPhotoName(this.photo);
+      console.log('🔄 Starting download for:', filename);
+      
+      // Direct download for shared photos (already has proper presigned URL)
+      const link = document.createElement("a");
       link.href = this.photo.photoUrl;
-      link.download = this.photo.photoName || 'shared-photo.jpg';
-      link.target = '_blank'; // Open in new tab to handle CORS if needed
+      link.download = filename;
+      link.setAttribute('download', filename);
+      link.style.display = "none";
+      
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      console.log('📥 Shared photo download triggered');
+    },// Simple download that mimics right-click "Save As"
+    triggerImageDownload(presignedUrl, filename = "image.jpg") {
+      // Create a temporary link and simulate right-click save behavior
+      const link = document.createElement("a");
+      link.href = presignedUrl;
+      link.download = filename;
+      
+      // Force download behavior (similar to right-click save)
+      link.setAttribute('download', filename);
+      link.style.display = "none";
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      console.log('� Download triggered (browser will handle cross-origin)');
+    },
+    
+    getPhotoName(photo) {
+      // Extract filename from various possible fields
+      const name = photo.photoName || photo.name || photo.PhotoName || 'shared-photo';
+      
+      // If it doesn't have an extension, add .jpg
+      if (!name.includes('.')) {
+        return name + '.jpg';
+      }
+      
+      return name;
     },
     
     editPhoto() {

@@ -429,12 +429,73 @@ export default {
     openViewer(photo) {
       this.selectedPhoto = photo;
       this.isViewerOpen = true;
-    },    downloadPhoto(photo) {
-      const link = document.createElement('a');
-      link.href = photo.url;
-      link.download = photo.PhotoName || photo.photoName || photo.name || 'photo';
+    },    async downloadPhoto(photo) {
+      if (!photo) {
+        console.warn('No photo data available for download');
+        return;
+      }
+      
+      const photoId = this.getPhotoId(photo);
+      const filename = this.getPhotoName(photo);
+      console.log('🔄 Starting backend download for:', filename, 'ID:', photoId);
+      
+      if (!photoId) {
+        console.warn('No photo ID available, cannot use backend download');
+        return;
+      }
+      
+      try {
+        // Use backend download API
+        const shareService = await import('../services/shareService.js').then(module => module.default);
+        const result = await shareService.downloadPhotoViaBackend(photoId);
+        
+        if (result.success) {
+          console.log('✅ Backend download completed successfully');
+        } else {
+          console.error('❌ Backend download failed:', result.error);
+          // Fallback to direct URL if available
+          if (photo.url) {
+            console.log('🔄 Trying fallback direct download...');
+            this.fallbackDownload(photo.url, filename);
+          }
+        }
+        
+      } catch (error) {
+        console.error('❌ Backend download error:', error);
+        // Fallback to direct URL if available
+        if (photo.url) {
+          console.log('🔄 Trying fallback direct download...');
+          this.fallbackDownload(photo.url, filename);
+        }
+      }
+    },
+
+    // Fallback download method
+    fallbackDownload(presignedUrl, filename) {
+      const link = document.createElement("a");
+      link.href = presignedUrl;
+      link.download = filename;
+      link.setAttribute('download', filename);
+      link.style.display = "none";
+      
+      document.body.appendChild(link);
       link.click();
-    },    goToEditor(photo) {
+      document.body.removeChild(link);
+      
+      console.log('📥 Fallback download triggered');
+    },
+    
+    getPhotoName(photo) {
+      // Extract filename from various possible fields
+      const name = photo.PhotoName || photo.photoName || photo.name || photo.photoId || 'photo';
+      
+      // If it doesn't have an extension, add .jpg
+      if (!name.includes('.')) {
+        return name + '.jpg';
+      }
+      
+      return name;
+    },goToEditor(photo) {
       this.$router.push({ 
         name: 'Editor', 
         query: { 
@@ -949,8 +1010,28 @@ export default {
       localStorage.clear();
       sessionStorage.clear();
       this.$router.replace('/login');
+    },    // Simple download that mimics right-click "Save As"
+    triggerImageDownload(presignedUrl, filename = "image.jpg") {
+      // Create a temporary link and simulate right-click save behavior
+      const link = document.createElement("a");
+      link.href = presignedUrl;
+      link.download = filename;
+      
+      // Force download behavior (similar to right-click save)
+      link.setAttribute('download', filename);
+      link.style.display = "none";
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      console.log('� Download triggered (browser will handle cross-origin)');
     },
-  },  async mounted() {
+    getPhotoId(photo) {
+      // Extract photo ID from various possible fields
+      return photo.photoId || photo.PhotoID || photo.id || photo.PhotoId;
+    },
+  },async mounted() {
     // Check authentication
     try {
       console.log('🔄 Dashboard mounted, checking authentication...');
