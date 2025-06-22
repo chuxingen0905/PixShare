@@ -709,8 +709,7 @@ export default {  data() {  return {
           console.warn('No photo ID provided');
           return null;
         }
-        
-        console.log('Fetching presigned URL for photo ID:', photoId);
+          console.log('Fetching presigned URL for photo ID:', photoId);
         
         // Ensure token is valid before making the request
         await authService.ensureValidToken();
@@ -719,22 +718,31 @@ export default {  data() {  return {
         if (!token) {
           console.error('No authentication token available');
           throw new Error('You must be logged in to view photos');
-        }        // Check if this is a group photo edit
+        }
+        
+        // Check if this is a group photo edit
         const groupId = this.$route.query.groupId;
         const isGroupPhoto = groupId != null;
         
-        // Create request body for presigned URL
-        const requestBody = {
-          photoIds: [{
-            photoId,
-            expirySeconds: 3600
-          }]
-        };
+        // Create request body for presigned URL (different formats for group vs individual)
+        const requestBody = isGroupPhoto 
+          ? {
+              photoIds: [{
+                photoId,
+                expirySeconds: 3600
+              }]
+            }
+          : {
+              photoIds: [photoId]  // Array of photo ID strings for individual photos
+            };
         
         // Use different endpoints for group vs individual photos
         const endpoint = isGroupPhoto 
           ? 'https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/groups/batch-presign'
           : 'https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display';
+          console.log('Is group photo:', isGroupPhoto);
+        console.log('Using endpoint:', endpoint);
+        console.log('Request body:', JSON.stringify(requestBody, null, 2));
         
         const res = await fetch(endpoint, {
           method: 'POST',
@@ -749,13 +757,16 @@ export default {  data() {  return {
           const errorText = await res.text();
           console.error('API error fetching presigned URL:', res.status, errorText);
           throw new Error(`Failed to fetch presigned URL: ${res.status} ${res.statusText}`);
-        }
+        }        const result = await res.json();
+        console.log('Presigned URL API response:', result);
         
-        const result = await res.json();
+        // Handle response format: { urls: [{ photoId, signedUrl }] }
         const url = result.urls?.[0]?.signedUrl;
         
         if (!url) {
           console.error('No presigned URL returned from API');
+          console.error('Full response:', result);
+          console.error('Expected: { urls: [{ photoId, signedUrl }] }');
           throw new Error('No presigned URL returned from API');
         }
         
@@ -1564,24 +1575,21 @@ export default {  data() {  return {
         
         // Create a File object from the blob
         const mimeType = `image/${this.outputFormat}`;
-        const file = new File([blob], filename, { type: mimeType });
-          // Check if this is a group photo edit
+        const file = new File([blob], filename, { type: mimeType });        // Check if this is a group photo edit
         const groupId = this.$route.query.groupId;
         const isGroupPhoto = groupId != null;
         
         if (isGroupPhoto) {
-          // For group photos, we need to use the override API
-          // Get the base64 data for the override
-          const base64Data = this.editedPhotoDataUrl.split(',')[1];
+          // For group photos, upload as a new photo (same as individual photos)
+          // This preserves the original photo and adds the edited version as a new photo
+          await this.uploadEditedPhotoToGroup(file, groupId);
           
-          // Navigate back to group photos with the edited data
+          // Navigate back to group photos with refresh flag
           this.$router.push({
             path: `/groups/${groupId}/photos`,
             query: { 
-              editedPhoto: 'true',
-              editedPhotoData: base64Data,
-              newFileName: filename,
-              originalPhotoId: this.photoId,
+              refreshPhotos: 'true',
+              timestamp: Date.now(), // Add timestamp to prevent caching
               groupName: this.$route.query.groupName,
               groupDescription: this.$route.query.groupDescription
             }
@@ -1672,7 +1680,76 @@ export default {  data() {  return {
         this.isLoading = false;
       }
     },
-      // Legacy method for backward compatibility
+    
+    // Upload the edited photo to a group (preserves original)
+    async uploadEditedPhotoToGroup(file, groupId) {
+      try {
+        // Show loading state
+        this.isLoading = true;
+        
+        // Read file as base64
+        const base64Image = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            // Get only the base64 part (remove data:image/jpeg;base64, prefix)
+            resolve(e.target.result.split(',')[1]);
+          };
+          reader.readAsDataURL(file);
+        });
+        
+        // Ensure token is valid
+        await authService.ensureValidToken();
+        const token = authService.getIdToken();
+        if (!token) {
+          throw new Error("Authentication token not available. Please log in again.");
+        }
+        
+        // Get current user ID
+        const user = await authService.getCurrentUser();
+        if (!user || !user.id) {
+          throw new Error("User ID not available. Please log in again.");
+        }
+        
+        // Upload to group using the group photo upload API
+        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/groups/upload', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            groupId: groupId,
+            userId: user.id,
+            photoName: file.name,
+            photoBase64: base64Image,
+            metadata: {
+              size: file.size,
+              type: file.type,
+              isEdited: true,
+              originalPhotoId: this.photoId || null
+            }
+          }),
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Group photo upload failed:", errorText);
+          throw new Error(`Upload failed with status ${response.status}`);
+        }
+        
+        // Parse successful result
+        const result = await response.json();
+        console.log("Edited group photo uploaded successfully:", result);
+        return result;
+      } catch (error) {
+        console.error("Error uploading edited group photo:", error);
+        throw error;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+      
+    // Legacy method for backward compatibility
     saveAndReturn() {
       this.saveWithOptions('return');
     },

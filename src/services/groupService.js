@@ -850,18 +850,149 @@ export const removeGroupMember = async (groupId, newOwnerId = null) => {
 };
 
 /**
- * Delete a group (placeholder for future implementation)
+ * Delete a group (only group owner can delete)
  * @param {string} groupId - The group ID to delete
  * @returns {Promise<Object>} Success response
  */
 export const deleteGroup = async (groupId) => {
-  console.log('Deleting group (not implemented yet):', groupId);
+  console.log('🔄 ======= DELETING GROUP =======');
+  console.log('🕐 Timestamp:', new Date().toISOString());
+  console.log('🆔 Group ID:', groupId);
   
-  // TODO: Implement when you have the Lambda function for this
-  return {
-    success: false,
-    error: 'Delete group functionality not implemented yet'
-  };
+  try {
+    // Validate input
+    if (!groupId || typeof groupId !== 'string' || groupId.trim().length === 0) {
+      throw new Error('Group ID is required and must be a non-empty string');
+    }
+
+    // Get authentication headers
+    console.log('🔐 Step 1: Getting authentication headers...');
+    const headers = await getAuthHeaders();
+    console.log('✅ Auth headers obtained successfully');
+
+    // Prepare request payload
+    const payload = {
+      groupId: groupId.trim()
+    };
+
+    console.log('📦 Delete group request payload:', JSON.stringify(payload, null, 2));
+    console.log('🚀 Step 2: Making API call to delete group...');
+    console.log('📤 Request URL:', `${API_ENDPOINT}/groups/manage`);
+    console.log('📤 Request method: DELETE');
+    console.log('📤 Target Lambda: pix-deleteGroup');
+    console.log('📤 Expected behavior: Delete group, all members, and S3 folder if user is owner');
+
+    // Make API request
+    const response = await fetch(`${API_ENDPOINT}/groups/manage`, {
+      method: 'DELETE',
+      headers: headers,
+      body: JSON.stringify(payload)
+    });
+
+    console.log('📥 Step 3: Processing response...');
+    console.log('📥 Response status:', response.status);
+    console.log('📥 Response status text:', response.statusText);
+    console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
+
+    // Get response text
+    const responseText = await response.text();
+    console.log('📥 Raw response text:', responseText);
+
+    // Handle response
+    if (!response.ok) {
+      console.error('❌ Delete group error response:', responseText);
+      
+      let errorMessage = 'Failed to delete group';
+      
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMessage = errorData.error || errorData.message || errorMessage;
+      } catch (e) {
+        errorMessage = responseText || errorMessage;
+      }
+
+      // Handle specific error cases
+      if (response.status === 400) {
+        console.error('❌ Bad Request - Invalid payload or missing groupId');
+        errorMessage = errorMessage || 'Invalid group ID provided';
+      } else if (response.status === 401) {
+        console.error('❌ Unauthorized - Authentication failed');
+        errorMessage = 'Authentication required. Please log in again.';
+      } else if (response.status === 403) {
+        console.error('❌ Forbidden - User is not the group owner');
+        errorMessage = 'Only the group owner can delete the group.';
+      } else if (response.status === 404) {
+        console.error('❌ Not Found - Group not found');
+        errorMessage = 'Group not found or already deleted.';
+      } else if (response.status === 500) {
+        console.error('💀 Server error - pix-deleteGroup Lambda failed');
+        console.log('   Check CloudWatch logs for pix-deleteGroup Lambda');
+        errorMessage = 'Server error. Please try again later.';
+      }
+
+      return {
+        success: false,
+        error: errorMessage,
+        statusCode: response.status
+      };
+    }
+
+    // Parse successful response
+    let responseData;
+    try {
+      responseData = responseText ? JSON.parse(responseText) : {};
+      console.log('✅ JSON parsing successful');
+    } catch (e) {
+      console.error('❌ Failed to parse response JSON:', e);
+      return {
+        success: false,
+        error: 'Invalid response from server',
+        statusCode: 500
+      };
+    }
+
+    console.log('✅ Step 4: Successfully deleted group');
+    console.log('📋 Response data:', responseData);
+    console.log('🧹 Deleted members:', responseData.deletedMembers || 0);
+    console.log('🗑️ S3 objects deleted:', responseData.s3Deleted || 0);
+    console.log('🎉 SUCCESS: Group deleted successfully');
+    console.log('🔄 ======= END DELETE GROUP =======');
+
+    return {
+      success: true,
+      data: responseData,
+      message: responseData.message || 'Group deleted successfully',
+      deletedMembers: responseData.deletedMembers || 0,
+      s3Deleted: responseData.s3Deleted || 0
+    };
+
+  } catch (error) {
+    console.error('❌ Delete group error:', error.message);
+    console.log('🔄 ======= END DELETE GROUP (ERROR) =======');
+    
+    // Handle different types of errors
+    if (error.message.includes('Authentication')) {
+      return {
+        success: false,
+        error: 'Please log in to delete a group',
+        statusCode: 401
+      };
+    }
+
+    if (error.message.includes('Group ID')) {
+      return {
+        success: false,
+        error: error.message,
+        statusCode: 400
+      };
+    }
+
+    return {
+      success: false,
+      error: error.message || 'An unexpected error occurred',
+      statusCode: 500
+    };
+  }
 };
 
 /**

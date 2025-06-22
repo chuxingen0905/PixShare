@@ -650,60 +650,7 @@ export default {
           window.open(photo.url, '_blank');
         } else {
           alert(`Failed to download photo: No download URL available`);
-        }
-      }
-    },
-    
-    async overrideGroupPhoto(photoId, editedPhotoData, newFileName) {
-      try {
-        console.log('🔄 Overriding group photo:', { photoId, newFileName, groupId: this.groupId });
-        
-        const authService = await import('../services/auth.js').then(module => module.default);
-        await authService.ensureValidToken();
-        const token = authService.getIdToken();
-        
-        if (!token) {
-          throw new Error("Authentication token not available");
-        }
-
-        // Call the PATCH /groups/override API
-        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/groups/override', {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            groupId: this.groupId,
-            photoId: photoId,
-            newPhotoName: newFileName,
-            newPhotoBase64: editedPhotoData,
-            metadata: {
-              isEdited: true,
-              editedAt: new Date().toISOString(),
-              originalPhotoId: photoId
-            }
-          }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Group photo override failed:", errorText);
-          throw new Error(`Override failed with status ${response.status}: ${errorText}`);
-        }
-
-        const result = await response.json();
-        console.log("✅ Group photo overridden successfully:", result);
-
-        // Refresh the group photos to show the updated photo
-        await this.fetchGroupPhotos();
-        
-        return { success: true, result };
-        
-      } catch (error) {
-        console.error("❌ Group photo override error:", error);
-        throw error;
-      }
+        }      }
     },
     
     goToEditor(photo) {
@@ -1046,41 +993,7 @@ export default {
     
     getDefaultExpiryDate() {
       const date = new Date();
-      date.setDate(date.getDate() + 7);
-      return date.toISOString().slice(0, 16);
-    },
-    
-    async handleEditedPhotoReturn() {
-      try {
-        const editedPhotoData = this.$route.query.editedPhotoData;
-        const newFileName = this.$route.query.newFileName;
-        const originalPhotoId = this.$route.query.originalPhotoId;
-        
-        if (!editedPhotoData || !newFileName || !originalPhotoId) {
-          console.warn('Missing data for edited photo return');
-          return;
-        }
-        
-        console.log('🔄 Processing edited photo for group override...');
-        
-        // Call the override API
-        await this.overrideGroupPhoto(originalPhotoId, editedPhotoData, newFileName);
-        
-        console.log('✅ Group photo override completed successfully');
-        
-        // Clean up the query parameters
-        this.$router.replace({
-          path: this.$route.path,
-          query: {
-            groupName: this.$route.query.groupName,
-            groupDescription: this.$route.query.groupDescription
-          }
-        });
-        
-      } catch (error) {
-        console.error('❌ Error handling edited photo return:', error);
-        alert(`Failed to update group photo: ${error.message}`);
-      }
+      date.setDate(date.getDate() + 7);      return date.toISOString().slice(0, 16);
     },
     
     forceLogin() {
@@ -1121,14 +1034,21 @@ export default {
         console.warn('❌ Invalid user data, redirecting to login');
         this.$router.replace('/login');
         return;
-      }
-      
+      }      
       console.log('✅ User authenticated successfully');
       this.authChecked = true;
-        // Check if returning from photo editor with edited photo
-      if (this.$route.query.editedPhoto === 'true' && this.$route.query.editedPhotoData) {
-        console.log('🔄 Handling edited photo return from editor...');
-        await this.handleEditedPhotoReturn();
+      
+      // Check if returning from photo editor with refresh flag
+      if (this.$route.query.refreshPhotos === 'true') {
+        console.log('🔄 Refreshing photos after editor return...');
+        // Clear the query parameters from URL for clean navigation
+        this.$router.replace({
+          path: this.$route.path,
+          query: {
+            groupName: this.$route.query.groupName,
+            groupDescription: this.$route.query.groupDescription
+          }
+        });
       }
       
       // Fetch group photos

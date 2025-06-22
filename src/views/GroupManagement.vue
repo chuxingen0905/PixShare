@@ -192,7 +192,7 @@
 </template>
 
 <script>
-import groupService, { addUserToGroup, getGroupMembers, removeGroupMember, kickUserFromGroup } from '../services/groupService.js';
+import groupService, { addUserToGroup, getGroupMembers, removeGroupMember, kickUserFromGroup, deleteGroup } from '../services/groupService.js';
 import { fetchAuthSession } from 'aws-amplify/auth';
 
 export default {
@@ -344,9 +344,91 @@ export default {
       }
       this.closeEditModal()
     },
-    
-    deleteGroup(groupId) {
-      this.groups = this.groups.filter(g => g.id !== groupId)
+      async deleteGroup(groupId) {
+      try {
+        // Find the group to get its name for confirmation
+        const group = this.groups.find(g => g.id === groupId);
+        const groupName = group ? group.name : 'this group';
+        
+        // Show confirmation dialog
+        const confirmDelete = confirm(
+          `⚠️ DELETE GROUP CONFIRMATION ⚠️\n\n` +
+          `Are you sure you want to permanently delete "${groupName}"?\n\n` +
+          `This action will:\n` +
+          `• Delete the group and all its settings\n` +
+          `• Remove all members from the group\n` +
+          `• Delete ALL photos stored in this group\n` +
+          `• This action CANNOT be undone\n\n` +
+          `Only the group owner can delete a group.\n\n` +
+          `Type "DELETE" in the next prompt to confirm.`
+        );
+        
+        if (!confirmDelete) {
+          console.log('❌ Group deletion cancelled by user');
+          return;
+        }
+        
+        // Second confirmation requiring typing "DELETE"
+        const typeConfirmation = prompt(
+          `Final confirmation required.\n\n` +
+          `Type "DELETE" (in uppercase) to permanently delete "${groupName}":`
+        );
+        
+        if (typeConfirmation !== 'DELETE') {
+          console.log('❌ Group deletion cancelled - incorrect confirmation text');
+          alert('Group deletion cancelled. You must type "DELETE" exactly to confirm.');
+          return;
+        }
+        
+        console.log('🗑️ User confirmed group deletion, proceeding...');
+        console.log('🆔 Deleting group:', groupId);
+        
+        // Call the API to delete the group
+        const result = await deleteGroup(groupId);
+        
+        if (result.success) {
+          console.log('✅ Group deleted successfully:', result);
+          
+          // Show success message with details
+          let message = `Group "${groupName}" has been deleted successfully.`;
+          if (result.deletedMembers > 0) {
+            message += `\n• Removed ${result.deletedMembers} member(s)`;
+          }
+          if (result.s3Deleted > 0) {
+            message += `\n• Deleted ${result.s3Deleted} file(s) from storage`;
+          }
+          
+          alert(message);
+          
+          // Remove the group from the local array
+          this.groups = this.groups.filter(g => g.id !== groupId);
+          
+          // Refresh the groups list from server to ensure consistency
+          await this.loadGroups();
+          
+        } else {
+          console.error('❌ Failed to delete group:', result.error);
+          
+          // Show user-friendly error message
+          let errorMessage = 'Failed to delete the group.';
+          
+          if (result.error.includes('owner')) {
+            errorMessage = 'Only the group owner can delete the group.';
+          } else if (result.error.includes('found')) {
+            errorMessage = 'Group not found or already deleted.';
+          } else if (result.error.includes('Authentication')) {
+            errorMessage = 'Please log in again and try again.';
+          } else {
+            errorMessage = result.error;
+          }
+          
+          alert(errorMessage);
+        }
+        
+      } catch (error) {
+        console.error('❌ Error during group deletion:', error);
+        alert('An unexpected error occurred while deleting the group. Please try again.');
+      }
     },
       async addMember() {
       if (!this.newMemberEmail.trim() || !this.validateEmail(this.newMemberEmail)) {
