@@ -448,48 +448,141 @@ export default {
       this.selectedPhoto = photo;
       this.isViewerOpen = true;
     },    
-    
-    downloadPhoto(photo) {
+      async downloadPhoto(photo) {
       try {
-        // First fetch the image to avoid browser requesting from S3 domain
-        fetch(photo.url)
-          .then(response => response.blob())
-          .then(blob => {
-            // Create a blob URL (in your own domain)
-            const blobUrl = URL.createObjectURL(blob);
-            
-            // Create link with blob URL
-            const link = document.createElement('a');
-            link.href = blobUrl;
-            
-            // Set filename with proper extension
-            let fileName = photo.name;
-            if (!fileName.includes('.')) {
-              const ext = photo.url.split('?')[0].split('.').pop() || 'jpg';
-              fileName += '.' + ext;
-            }
-            
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            
-            // Clean up
-            setTimeout(() => {
-              document.body.removeChild(link);
-              URL.revokeObjectURL(blobUrl);
-            }, 100);
-            
-            console.log('Download complete for:', fileName);
-          })
-          .catch(error => {
-            console.error('Download failed:', error);
-            // Fall back to basic method
+        console.log('Downloading photo:', photo);
+        
+        // Extract photoId using multiple fallbacks
+        const photoId = photo.photoId || 
+                       photo.PhotoID || 
+                       photo.id || 
+                       photo.S3Key || 
+                       photo.s3Key;
+                       
+        if (!photoId) {
+          console.error('No photoId found in photo object:', photo);
+          alert('Cannot download photo: No photo ID found');
+          return;
+        }
+        
+        // Get file name with fallbacks for display in toast/console
+        const displayName = photo.name || photo.photoName || photo.PhotoName || 'photo';
+        
+        // Import auth service
+        const authService = await import('../services/auth.js').then(module => module.default);
+        
+        // Ensure token is valid
+        await authService.ensureValidToken();
+        const token = authService.getIdToken();
+        if (!token) {
+          console.error("Token is null. User may not be logged in.");
+          alert('Please log in to download photos');
+          return;
+        }
+          // Get file name to use for download
+        let fileName = displayName;
+        if (!fileName.includes('.')) {
+          // Try to extract extension from URL or default to jpg
+          const ext = photo.url ? photo.url.split('?')[0].split('.').pop() || 'jpg' : 'jpg';
+          fileName += '.' + ext;
+        }
+        
+        // Call the special download API endpoint
+        const response = await fetch('https://fk96bt7fv3.execute-api.ap-southeast-5.amazonaws.com/pixDeployment/photos/display', {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            photoId: photoId,
+            filename: fileName  // Include filename for content-disposition header
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to get download URL: ${response.status}`);
+        }
+          const result = await response.json();
+        console.log('Download URL response:', result);
+        
+        // Check for different possible response structures
+        const downloadUrl = result.downloadUrl || 
+                           (result.url ? result.url : null) || 
+                           (result.urls && result.urls.length > 0 ? result.urls[0].signedUrl : null) || 
+                           (result.signedUrl ? result.signedUrl : null);
+        
+        if (downloadUrl) {
+          console.log('Opening download URL:', downloadUrl);
+          
+          // Open the download URL which should trigger automatic download
+          // due to Content-Disposition header set on the server
+          window.open(downloadUrl, '_blank');
+          
+          console.log('Download initiated for:', displayName);
+        } else {
+          // Fall back to basic method if we have a URL
+          if (photo.url) {
+            console.log('No special download URL found, using photo URL directly');
             window.open(photo.url, '_blank');
-          });
-      } catch (error) {
+          } else {
+            throw new Error('No download URL returned from the server');
+          }
+        }      } catch (error) {
         console.error('Download error:', error);
-      }    
-    },    
+        
+        // Don't show an alert - just silently fall back to regular URL method
+        // This provides a better user experience
+        
+        // Fall back to basic method if we have a URL
+        if (photo.url) {
+          console.log('Falling back to direct URL download due to error:', error.message);
+          
+          try {
+            // Create a more reliable download method as fallback
+            fetch(photo.url)
+              .then(response => response.blob())
+              .then(blob => {
+                // Create a blob URL (in your own domain)
+                const blobUrl = URL.createObjectURL(blob);
+                
+                // Get file name with proper extension
+                let fileName = displayName;
+                if (!fileName.includes('.')) {
+                  const ext = photo.url.split('?')[0].split('.').pop() || 'jpg';
+                  fileName += '.' + ext;
+                }
+                
+                // Create link with blob URL
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                
+                // Clean up
+                setTimeout(() => {
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(blobUrl);
+                }, 100);
+                
+                console.log('Fallback download complete for:', fileName);
+              })
+              .catch(fallbackError => {
+                console.error('Fallback download failed:', fallbackError);
+                // Last resort: direct window.open
+                window.open(photo.url, '_blank');
+              });
+          } catch (fallbackError) {
+            console.error('Error in fallback download:', fallbackError);
+            window.open(photo.url, '_blank');
+          }
+        } else {
+          // Only show alert if we have no fallback URL
+          alert(`Failed to download photo: No download URL available`);
+        }
+      }
+    },
     
     goToEditor(photo) {
       // Extract photoId from photo object, trying all possible property names
