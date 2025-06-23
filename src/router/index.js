@@ -3,6 +3,7 @@ import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Dashboard from '../views/Dashboard.vue'
 import ForgotPassword from '../views/ForgotPassword.vue'
+import ResetPassword from '../views/ResetPassword.vue'
 import Editor from '../views/PhotoEditor.vue'
 import GroupManagementPage from '../views/GroupManagementPage.vue'
 import GroupPhotos from '../views/GroupPhotos.vue'
@@ -15,6 +16,12 @@ const routes = [
     { path: '/register', name: 'Register', component: Register },
     { path: '/dashboard', name: 'Dashboard', component: Dashboard },
     { path: '/forgot', name: 'ForgotPassword', component: ForgotPassword },
+    { 
+        path: '/reset-password/:email', 
+        name: 'ResetPassword', 
+        component: ResetPassword,
+        props: true
+    },
     { path: '/editor', name: 'Editor', component: Editor },
     { 
         path: '/groups', 
